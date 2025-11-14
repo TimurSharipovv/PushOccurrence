@@ -2,42 +2,72 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"PushOccurrence/internal/handlers"
-
-	"github.com/jackc/pgx/v5"
+	"PushOccurrence/internal/db"
+	"PushOccurrence/internal/mq"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	conn, err := pgx.Connect(ctx, "postgres://postgres:postgres@localhost:5432/message_queue_db")
+	database, err := db.New(ctx)
 	if err != nil {
-		log.Fatalf("failed to connect: %v", err)
+		log.Fatalf("db connection failed: %v", err)
 	}
-	defer conn.Close(ctx)
+	defer database.Close(ctx)
 
-	_, err = conn.Exec(ctx, "LISTEN queue_message_log")
+	amqpURL := os.Getenv("AMQP_URL")
+	if amqpURL == "" {
+		amqpURL = "amqp://guest:guest@localhost:5672/"
+	}
+	producer, err := mq.NewProducer(amqpURL, "push_events")
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("mq init failed: %v", err)
 	}
-	fmt.Println("Listening for NOTIFY events...")
+	defer producer.Close()
 
-	for {
-		notification, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			log.Printf("error waiting for notify: %v", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		<-sig
+		log.Println("shutting down...")
+		cancel()
+	}()
 
-		id := notification.Payload
-		fmt.Printf("New message event: %s\n", id)
-
-		handlers.HandleMessage(ctx, conn, id)
-
+	if err := database.Listen(ctx, "queue_message_log", func(ctx context.Context, id string) {
+		processEvent(ctx, database, producer, id)
+	}); err != nil {
+		log.Fatalf("listener failed: %v", err)
 	}
+}
+
+func processEvent(ctx context.Context, database *db.Db, producer *mq.Producer, id string) {
+	msg, err := database.GetUnprocessedByID(ctx, id)
+	if err != nil {
+		log.Printf("skip event %s: %v", id, err)
+		return
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"id":        msg.ID,
+		"table":     msg.TableName,
+		"operation": msg.Operation,
+		"payload":   json.RawMessage(msg.Payload),
+		"ts":        time.Now().UTC(),
+	})
+
+	if err := producer.Publish(ctx, body, ""); err != nil {
+		log.Printf("failed to publish to mq for id=%s: %v", msg.ID, err)
+		return
+	}
+
+	database.MarkProcessed(ctx, msg.ID)
+	log.Printf("processed id=%s -> published", msg.ID)
 }

@@ -6,10 +6,12 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Db struct {
-	Conn *pgx.Conn
+	Conn   *pgx.Conn
+	worker *pgxpool.Pool
 }
 
 func New(ctx context.Context) (*Db, error) {

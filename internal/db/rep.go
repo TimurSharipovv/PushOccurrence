@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"log"
 )
 
 type Message struct {
@@ -12,28 +11,23 @@ type Message struct {
 	Payload   string
 }
 
-func (d *Db) GetUnprocessedByID(ctx context.Context, id string) (*Message, error) {
-	row := d.Conn.QueryRow(ctx, `
-		SELECT id::text, table_name, operation, payload::text
-		FROM data_exchange.message_queue_log
-		WHERE id = $1 AND processed = false
-		FOR UPDATE SKIP LOCKED
-	`, id)
-
+func (db *Db) GetUnprocessedByID(ctx context.Context, id string) (*Message, error) {
+	row := db.worker.QueryRow(ctx,
+		`SELECT id, table_name, operation, payload 
+         FROM data_exchange.message_queue_log 
+         WHERE id = $1 AND processed = false`,
+		id,
+	)
 	var m Message
-	if err := row.Scan(&m.ID, &m.TableName, &m.Operation, &m.Payload); err != nil {
-		return nil, err
-	}
-	return &m, nil
+	err := row.Scan(&m.ID, &m.TableName, &m.Operation, &m.Payload)
+	return &m, err
 }
 
-func (d *Db) MarkProcessed(ctx context.Context, id string) {
-	_, err := d.Conn.Exec(ctx, `
-		UPDATE data_exchange.message_queue_log
-		SET processed = true, updated_at = now()
-		WHERE id = $1
-	`, id)
-	if err != nil {
-		log.Printf("failed to mark processed: %v", err)
-	}
+func (db *Db) MarkProcessed(ctx context.Context, id string) error {
+	_, err := db.worker.Exec(ctx,
+		`UPDATE data_exchange.message_queue_log 
+         SET processed = true WHERE id = $1`,
+		id,
+	)
+	return err
 }
