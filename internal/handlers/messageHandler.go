@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log"
 
+	"PushOccurrence/internal/mq"
+
 	"github.com/jackc/pgx/v5"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func HandleMessage(ctx context.Context, pgConn *pgx.Conn, mqCh *amqp.Channel, queueName, id string) {
+func HandleMessage(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, id string) {
 	var payload, operation, tableName string
 	err := pgConn.QueryRow(ctx, `
 		SELECT payload::text, operation, table_name
@@ -25,16 +26,7 @@ func HandleMessage(ctx context.Context, pgConn *pgx.Conn, mqCh *amqp.Channel, qu
 
 	fmt.Printf("Processing change from table %s (%s): %s\n", tableName, operation, payload)
 
-	err = mqCh.Publish(
-		"",
-		queueName,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        []byte(payload),
-		},
-	)
+	err = rabbit.Publish([]byte(payload))
 	if err != nil {
 		log.Printf("failed to publish to RabbitMQ: %v", err)
 		return

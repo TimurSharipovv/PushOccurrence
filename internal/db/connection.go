@@ -1,5 +1,52 @@
 package db
 
+import (
+	"context"
+	"log"
+
+	"github.com/jackc/pgx/v5"
+)
+
+var Conn *pgx.Conn
+
+func Init(ctx context.Context, connectionString string) {
+	var err error
+	Conn, err = pgx.Connect(ctx, connectionString)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+// func Connect(){
+// 	ctx := context.Background()
+
+// 	conn, err := pgx.Connect(ctx, "postgres://postgres:postgres@localhost:5432/message_queue_db")
+// 	if err != nil {
+// 		log.Fatalf("failed to connect to postgres: %v", err)
+// 	}
+// 	defer conn.Close(ctx)
+
+// 	_, err = conn.Exec(ctx, "LISTEN queue_message_log")
+// 	if err != nil {
+// 		log.Fatalf("failed to listen: %v", err)
+// 	}
+// 	fmt.Println("Listening for NOTIFY events...")
+
+// 	for {
+// 		notification, err := conn.WaitForNotification(ctx)
+// 		if err != nil {
+// 			log.Printf("error waiting for notify: %v", err)
+// 			time.Sleep(2 * time.Second)
+// 			continue
+// 		}
+
+// 		id := notification.Payload
+// 		fmt.Printf("New message event: %s\n", id)
+
+// 		handlers.HandleMessage(ctx, conn, ch, queueName, id)
+// 	}
+// }
+
 // import (
 // 	"context"
 // 	"fmt"

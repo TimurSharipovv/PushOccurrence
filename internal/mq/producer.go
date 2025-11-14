@@ -1,5 +1,65 @@
 package mq
 
+import (
+	"log"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type Mq struct {
+	Conn    *amqp.Connection
+	Channel *amqp.Channel
+	Queue   string
+}
+
+func NewMq(url, queueName string) *Mq {
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		log.Fatalf("failed to connect to RabbitMQ: %v", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("failed to open channel: %v", err)
+	}
+
+	_, err = ch.QueueDeclare(
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("failed to declare queue: %v", err)
+	}
+
+	return &Mq{
+		Conn:    conn,
+		Channel: ch,
+		Queue:   queueName,
+	}
+}
+
+func (m *Mq) Publish(payload []byte) error {
+	return m.Channel.Publish(
+		"",
+		m.Queue,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        payload,
+		},
+	)
+}
+
+func (m *Mq) Close() {
+	m.Channel.Close()
+	m.Conn.Close()
+}
+
 // import (
 // 	"context"
 // 	"errors"
