@@ -4,31 +4,48 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/jackc/pgx/v5"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func HandleMessage(ctx context.Context, conn *pgx.Conn, id string) {
+func HandleMessage(ctx context.Context, pgConn *pgx.Conn, mqCh *amqp.Channel, queueName, id string) {
 	var payload, operation, tableName string
-	err := conn.QueryRow(ctx, `
-	SELECT payload::text, operation, table_name
-	FROM data_exchange.message_queue_log
-	WHERE id = $1 AND processed = false                  
-	FOR UPDATE SKIP LOCKED`,
-		id).Scan(&payload, &operation, tableName)
+	err := pgConn.QueryRow(ctx, `
+		SELECT payload::text, operation, table_name
+		FROM data_exchange.message_queue_log
+		WHERE id = $1 AND processed = false
+		FOR UPDATE SKIP LOCKED
+	`, id).Scan(&payload, &operation, &tableName)
 
 	if err != nil {
-		log.Println(err)
+		log.Printf("skip (maybe already processed): %v", err)
 		return
 	}
 
-	fmt.Printf("change from table %s (%s): %s\n", tableName, operation, payload)
+	fmt.Printf("Processing change from table %s (%s): %s\n", tableName, operation, payload)
 
-	time.Sleep(1 * time.Second)
-
-	_, err = conn.Exec(ctx, `UPDATE data_exchange.message_queue_log SET proceed = true, updated_at = now() WHERE id = $1`)
+	err = mqCh.Publish(
+		"",
+		queueName,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        []byte(payload),
+		},
+	)
 	if err != nil {
-		log.Println(err)
+		log.Printf("failed to publish to RabbitMQ: %v", err)
+		return
+	}
+
+	_, err = pgConn.Exec(ctx, `
+		UPDATE data_exchange.message_queue_log
+		SET processed = true, updated_at = now()
+		WHERE id = $1
+	`, id)
+	if err != nil {
+		log.Printf("failed to mark processed: %v", err)
 	}
 }
