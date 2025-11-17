@@ -14,10 +14,13 @@ func HandleMessage(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, id stri
 	var messageType string
 
 	err := pgConn.QueryRow(ctx, `
-		SELECT message_type
+		SELECT message_id
 		FROM data_exchange.message_queue_log
-		WHERE message_id = $1 AND transferred = false
+		WHERE transferred = false
+		ORDER BY message_time
 		FOR UPDATE SKIP LOCKED
+		LIMIT 1;
+
 	`, id).Scan(&messageType)
 
 	if err != nil {
