@@ -11,33 +11,51 @@ import (
 )
 
 func HandleMessage(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, id string) {
-	var payload, operation, tableName string
+	var messageType string
+
 	err := pgConn.QueryRow(ctx, `
-		SELECT payload::text, operation, table_name
+		SELECT message_type
 		FROM data_exchange.message_queue_log
-		WHERE id = $1 AND processed = false
+		WHERE message_id = $1 AND transferred = false
 		FOR UPDATE SKIP LOCKED
-	`, id).Scan(&payload, &operation, &tableName)
+	`, id).Scan(&messageType)
 
 	if err != nil {
-		log.Printf("skip: %v", err)
+		log.Printf("skip (maybe processed or not found): %v", err)
 		return
 	}
 
-	fmt.Printf("process changing %s (%s): %s\n", tableName, operation, payload)
+	var messageBody []byte
 
-	err = rabbit.Publish([]byte(payload))
+	err = pgConn.QueryRow(ctx, `
+		SELECT message_body
+		FROM data_exchange.message_queue_log_data
+		WHERE message_id = $1
+	`, id).Scan(&messageBody)
+
 	if err != nil {
-		log.Printf("failed to publish to RabbitMQ: %v", err)
+		log.Printf("failed to read message body: %v", err)
+		return
+	}
+
+	fmt.Printf(
+		"processing message id=%s, type=%s, body=%s\n",
+		id, messageType, string(messageBody),
+	)
+
+	err = rabbit.Publish(messageBody)
+	if err != nil {
+		log.Printf("failed to publish message to RabbitMQ: %v", err)
 		return
 	}
 
 	_, err = pgConn.Exec(ctx, `
 		UPDATE data_exchange.message_queue_log
-		SET processed = true, updated_at = now()
-		WHERE id = $1
+		SET transferred = true, transfer_time = now()
+		WHERE message_id = $1
 	`, id)
+
 	if err != nil {
-		log.Printf("failed to mark processed: %v", err)
+		log.Printf("failed to update transferred status: %v", err)
 	}
 }
