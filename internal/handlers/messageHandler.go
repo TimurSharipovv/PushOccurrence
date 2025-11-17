@@ -20,11 +20,11 @@ func HandleMessage(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, id stri
 	`, id).Scan(&payload, &operation, &tableName)
 
 	if err != nil {
-		log.Printf("skip (maybe already processed): %v", err)
+		log.Printf("skip: %v", err)
 		return
 	}
 
-	fmt.Printf("Processing change from table %s (%s): %s\n", tableName, operation, payload)
+	fmt.Printf("process changing %s (%s): %s\n", tableName, operation, payload)
 
 	err = rabbit.Publish([]byte(payload))
 	if err != nil {

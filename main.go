@@ -21,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	fmt.Println("Listening for NOTIFY events...")
+	fmt.Println("listening for NOTIFY events...")
 
 	rabbit := mq.NewMq("amqp://guest:guest@localhost:5672/", "message_queue")
 	defer rabbit.Close()
@@ -35,7 +35,7 @@ func main() {
 		}
 
 		id := notification.Payload
-		fmt.Printf("New message event: %s\n", id)
+		fmt.Printf("new message event: %s\n", id)
 
 		handlers.HandleMessage(ctx, db.Conn, rabbit, id)
 	}
