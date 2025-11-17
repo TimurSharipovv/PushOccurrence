@@ -1,57 +1,57 @@
 package db
 
-import (
-	"context"
-	"log"
+// import (
+// 	"context"
+// 	"time"
 
-	"PushOccurrence/internal/handlers"
-	"PushOccurrence/internal/mq"
+// 	"PushOccurrence/internal/handlers"
+// 	"PushOccurrence/internal/mq"
 
-	"github.com/jackc/pgx/v5"
-)
+// 	"github.com/jackc/pgx/v5"
+// )
 
-// функция находит все transfered = false и по каждому id вызывает HandleMessage.
-// Работает в цикле пока есть необработанные записи.
-// Установлен limit 100 чтобы не забирать все строки сразу.
-// после снова возвращается в цикл пока не станет пусто
-// вызов при старте после подключения к pq и mq, но строго до того как начинаем слушать
-func ProcessBacklog(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq) {
-	for {
-		rows, err := pgConn.Query(ctx, `
-		select message_id::text from data_exchange.message_queue_log
-		where transferred = false
-		order by message_time 
-		limit 100`)
+// // функция находит список неотправленных сообщений по id
+// func FetchBacklogIds(ctx context.Context, conn *pgx.Conn, limit int) ([]string, error) {
+// 	rows, err := conn.Query(ctx, `
+//         SELECT message_id::text
+//         FROM data_exchange.message_queue_log
+//         WHERE transferred = false
+//         ORDER BY message_time
+//         LIMIT $1
+//     `, limit)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
 
-		if err != nil {
-			log.Printf("query error: %v", err)
-			return
-		}
+// 	var ids []string
+// 	for rows.Next() {
+// 		var id string
+// 		if err := rows.Scan(&id); err != nil {
+// 			return nil, err
+// 		}
+// 		ids = append(ids, id)
+// 	}
+// 	return ids, rows.Err()
+// }
 
-		ids := make([]string, 0)
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				log.Printf("scan error: %v", err)
-				continue
-			}
-			ids = append(ids, id)
-		}
-		rows.Close()
+// // функция запускается отдельной горутиной для поиска неотпрпавленных сообщений с помощью FetchBacklogIds с интервалом в 10 сек
+// // обработка сообщений через HandleMessage
+// // вызов при старте после подключения к pq и mq, но строго до начала WaitFotNotification
+// func RunBacklogWorker(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, notifyChan <-chan string) {
 
-		if len(ids) == 0 {
-			log.Printf("no pending message: ")
-			return
-		}
+// 	for {
+// 		select {
+// 		case id := <-notifyChan:
+// 			handlers.HandleMessage(ctx, pgConn, rabbit, id)
 
-		log.Printf("found %d pending message", len(ids))
+// 		default:
+// 			ids, _ := FetchBacklogIds(ctx, pgConn, 100)
+// 			for _, bid := range ids {
+// 				handlers.HandleMessage(ctx, pgConn, rabbit, bid)
+// 			}
 
-		for _, id := range ids {
-			handlers.HandleMessage(ctx, pgConn, rabbit, id)
-
-			if err != nil {
-				log.Printf("error processing message %s %v", id, err)
-			}
-		}
-	}
-}
+// 			time.Sleep(1 * time.Second)
+// 		}
+// 	}
+// }
