@@ -10,15 +10,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func processBacklog(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq) {
+// функция находит все transfered = false и по каждому id вызывает HandleMessage.
+// Работает в цикле пока есть необработанные записи.
+// Установлен limit 100 чтобы не забирать все строки сразу.
+// после снова возвращается в цикл пока не станет пусто
+// вызов при старте после подключения к pq и mq, но строго до того как начинаем слушать
+func ProcessBacklog(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq) {
 	for {
 		rows, err := pgConn.Query(ctx, `
 		select message_id::text from data_exchange.message_queue_log
 		where transferred = false
-		order by message_time limit 100`)
+		order by message_time 
+		limit 100`)
 
 		if err != nil {
-			log.Printf("query error: %w", err)
+			log.Printf("query error: %v", err)
 			return
 		}
 
@@ -42,6 +48,10 @@ func processBacklog(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq) {
 
 		for _, id := range ids {
 			handlers.HandleMessage(ctx, pgConn, rabbit, id)
+
+			if err != nil {
+				log.Printf("error processing message %s %v", id, err)
+			}
 		}
 	}
 }

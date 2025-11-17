@@ -17,14 +17,28 @@ func main() {
 	db.Init(ctx, "postgres://postgres:postgres@localhost:5432/message_queue_db")
 	defer db.Conn.Close(ctx)
 
-	_, err := db.Conn.Exec(ctx, "LISTEN queue_message_log")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
 	fmt.Println("listening for NOTIFY events...")
 
 	rabbit := mq.NewMq("amqp://guest:guest@localhost:5672/", "message_queue")
 	defer rabbit.Close()
+
+	db.ProcessBacklog(ctx, db.Conn, rabbit)
+
+	// чтобы полностью не зависеть от notify добавляем легкую проверку (каждые ) на случай потери уведомления со стороны notify
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			log.Println("sometimes check")
+			db.ProcessBacklog(ctx, db.Conn, rabbit)
+		}
+	}()
+
+	_, err := db.Conn.Exec(ctx, "LISTEN queue_message_log")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
 
 	for {
 		notification, err := db.Conn.WaitForNotification(ctx)
