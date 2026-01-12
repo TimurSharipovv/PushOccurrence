@@ -2,73 +2,55 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"PushOccurrence/internal/mq"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func HandleMessage(ctx context.Context, pgConn *pgx.Conn, rabbit *mq.Mq, id string) {
-	var messageType string
+func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messageID string) {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		log.Printf("failed to acquire db connection: %v", err)
+		return
+	}
+	defer conn.Release()
 
-	err := pgConn.QueryRow(ctx, `
-		SELECT message_type
-		FROM data_exchange.message_queue_log
-		WHERE message_id = $1 AND transferred = false
+	row := conn.QueryRow(ctx, `
+		SELECT message_type FROM data_exchange.message_queue_log
+		WHERE message_id=$1 AND transferred=false
 		FOR UPDATE SKIP LOCKED
-	`, id).Scan(&messageType)
+	`, messageID)
 
-	if err != nil {
-		log.Printf("skip: %v", err)
+	var messageType string
+	if err := row.Scan(&messageType); err != nil {
+		log.Printf("failed to scan message_type: %v", err)
 		return
 	}
 
-	var messageBody []byte
+	row2 := conn.QueryRow(ctx, `
+		SELECT message_body FROM data_exchange.message_queue_log_data
+		WHERE message_id=$1
+	`, messageID)
 
-	err = pgConn.QueryRow(ctx, `
-    SELECT message_body
-    FROM data_exchange.message_queue_log_data
-    WHERE message_id = $1
-	`, id).Scan(&messageBody)
-
-	if err != nil {
-		log.Printf("bad message: no body for id=%s (%v)", id, err)
-
-		_, updErr := pgConn.Exec(ctx, `
-			UPDATE data_exchange.message_queue_log
-			SET transferred = true, transfer_time = now()
-			WHERE message_id = $1
-		`, id)
-
-		if updErr != nil {
-			log.Printf("failed to mark bad message as transferred: %v", updErr)
-		}
-
+	var body []byte
+	if err := row2.Scan(&body); err != nil {
+		log.Printf("failed to scan message_body: %v", err)
 		return
 	}
 
-	fmt.Printf(
-		"processing message id=%s, type=%s, body=%s\n",
-		id, messageType, string(messageBody),
-	)
-
-	err = rabbit.Publish(messageBody)
-	if err != nil {
-		log.Printf("failed to publish message to RabbitMQ: %v", err)
+	if err := rabbit.Publish(body); err != nil {
+		log.Printf("failed to publish to rabbit: %v", err)
 		return
 	}
 
-	// _, err = pgConn.Exec(ctx, `
-	// 	UPDATE data_exchange.message_queue_log
-	// 	SET transferred = true, transfer_time = now()
-	// 	WHERE message_id = $1
-	// `, id)
-
-	// if err != nil {
-	// 	log.Printf("failed to update transferred status: %v", err)
-	// }
-
-	// log.Printf("update res %v", res.RowsAffected())
+	_, err = conn.Exec(ctx, `
+		UPDATE data_exchange.message_queue_log
+		SET transferred=true, transfer_time=now()
+		WHERE message_id=$1
+	`, messageID)
+	if err != nil {
+		log.Printf("failed to update transferred: %v", err)
+	}
 }

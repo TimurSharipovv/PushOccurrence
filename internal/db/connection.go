@@ -4,35 +4,25 @@ import (
 	"context"
 	"log"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var Conn *pgx.Conn
-var WorkerConn *pgx.Conn
+var Pool *pgxpool.Pool
 
 func Init(ctx context.Context, connectionString string) {
-	var listenErr error
-	Conn, listenErr = pgx.Connect(ctx, connectionString)
-	if listenErr != nil {
-		log.Println(listenErr)
+	var err error
+	Pool, err = pgxpool.New(ctx, connectionString)
+	if err != nil {
+		log.Fatalf("failed to create pgx pool: %v", err)
+	}
+
+	// Проверим соединение
+	if err := Pool.Ping(ctx); err != nil {
+		log.Fatalf("failed to ping db: %v", err)
 	}
 }
 
-/* func BuildConnStr (){
-	pgConnStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-        cfg.Postgres.User,
-        cfg.Postgres.Password,
-        cfg.Postgres.Host,
-        cfg.Postgres.Port,
-        cfg.Postgres.Database,
-        cfg.Postgres.SSLMode,
-	)
-} */
-
-// func InitWorker(ctx context.Context, connectionString string) {
-// 	WorkerConn, workerErr = pgx.Connect(ctx, connectionString)
-// 	if workerErr != nil {
-// 		log.Println(workerErr)
-// 	}
-// }
+// Закрытие пула
+func Close(ctx context.Context) {
+	Pool.Close()
+}
