@@ -40,9 +40,11 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		return
 	}
 
+	log.Printf("publishing message %s to RabbitMQ", messageID)
 	if err := rabbit.Publish(body); err != nil {
 		log.Printf("failed to publish to rabbit: %v", err)
-		return
+	} else {
+		log.Printf("message %s published successfully", messageID)
 	}
 
 	_, err = conn.Exec(ctx, `

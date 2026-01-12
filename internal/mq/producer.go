@@ -15,12 +15,26 @@ type Mq struct {
 }
 
 func NewMq(url, queueName string) *Mq {
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		log.Fatalf("failed to connect to RabbitMQ: %v", err)
+	var conn *amqp.Connection
+	var ch *amqp.Channel
+	var err error
+
+	retryCount := 5
+	for i := 1; i <= retryCount; i++ {
+		conn, err = amqp.Dial(url)
+		if err == nil {
+			break
+		}
+
+		log.Printf("RabbitMQ connection attempt %d/%d failed: %v", i, retryCount, err)
+		time.Sleep(2 * time.Second)
 	}
 
-	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("failed to connect to RabbitMQ after %d attempts: %v", retryCount, err)
+	}
+
+	ch, err = conn.Channel()
 	if err != nil {
 		log.Fatalf("failed to open channel: %v", err)
 	}
