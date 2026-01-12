@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"PushOccurrence/config"
 	"PushOccurrence/internal/db"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
@@ -14,17 +15,39 @@ import (
 func main() {
 	ctx := context.Background()
 
-	db.Init(ctx, "postgres://postgres:postgres@localhost:5432/message_queue_db")
+	cfg, err := config.Load("config/config.json")
+	if err != nil {
+		log.Fatalf("can't load config: %v", err)
+	}
+
+	pgConnStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.Database,
+		cfg.Postgres.SSLMode,
+	)
+
+	db.Init(ctx, pgConnStr)
 	defer db.Conn.Close(ctx)
 
-	_, err := db.Conn.Exec(ctx, "LISTEN queue_message_log")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+	for _, channel := range cfg.Listener.Channels {
+		_, err := db.Conn.Exec(ctx, "LISTEN "+channel)
+		if err != nil {
+			log.Fatalf("failed to listen on %s: %v", channel, err)
+		}
+		log.Printf("listening on channel: %s", channel)
 	}
-	fmt.Println("listening for NOTIFY events...")
 
-	rabbit := mq.NewMq("amqp://guest:guest@localhost:5672/", "message_queue")
+	rabbit := mq.NewMq(
+		cfg.RabbitMQ.URL,
+		cfg.RabbitMQ.Queue.Name,
+	)
 	defer rabbit.Close()
+
+	log.Println("service started, waiting for notifications...")
 
 	for {
 		notification, err := db.Conn.WaitForNotification(ctx)
@@ -34,9 +57,15 @@ func main() {
 			continue
 		}
 
-		id := notification.Payload
-		fmt.Printf("new message event: %s\n", id)
+		payload := notification.Payload
+		channel := notification.Channel
 
-		handlers.HandleMessage(ctx, db.Conn, rabbit, id)
+		log.Printf(
+			"received notify: channel=%s payload=%s",
+			channel,
+			payload,
+		)
+
+		handlers.HandleMessage(ctx, db.Conn, rabbit, payload)
 	}
 }
