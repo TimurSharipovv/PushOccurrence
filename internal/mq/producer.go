@@ -1,6 +1,7 @@
 package mq
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -12,6 +13,7 @@ type Mq struct {
 	Channel     *amqp.Channel
 	Queue       string
 	retryBuffer chan []byte
+	confirms    <-chan amqp.Confirmation
 }
 
 func NewMq(url, queueName string) *Mq {
@@ -25,11 +27,9 @@ func NewMq(url, queueName string) *Mq {
 		if err == nil {
 			break
 		}
-
 		log.Printf("RabbitMQ connection attempt %d/%d failed: %v", i, retryCount, err)
 		time.Sleep(2 * time.Second)
 	}
-
 	if err != nil {
 		log.Fatalf("failed to connect to RabbitMQ after %d attempts: %v", retryCount, err)
 	}
@@ -51,11 +51,18 @@ func NewMq(url, queueName string) *Mq {
 		log.Fatalf("failed to declare queue: %v", err)
 	}
 
+	if err := ch.Confirm(false); err != nil {
+		log.Fatalf("failed to put channel in confirm mode: %v", err)
+	}
+
+	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, 1))
+
 	mq := &Mq{
 		Conn:        conn,
 		Channel:     ch,
 		Queue:       queueName,
 		retryBuffer: make(chan []byte, 100),
+		confirms:    confirms,
 	}
 
 	go mq.retryLoop()
@@ -63,7 +70,7 @@ func NewMq(url, queueName string) *Mq {
 	return mq
 }
 
-func (m *Mq) Publish(payload []byte) error {
+func (m *Mq) Publish(payload []byte) (uint64, error) {
 	err := m.Channel.Publish(
 		"",
 		m.Queue,
@@ -75,15 +82,16 @@ func (m *Mq) Publish(payload []byte) error {
 		},
 	)
 	if err != nil {
-		log.Println(err)
-		select {
-		case m.retryBuffer <- payload:
-		default:
-			log.Println(err)
-		}
-		return err
+		return 0, err
 	}
-	return nil
+
+	confirm := <-m.confirms
+
+	if !confirm.Ack {
+		return 0, fmt.Errorf("message nack from broker, deliveryTag=%d", confirm.DeliveryTag)
+	}
+
+	return confirm.DeliveryTag, nil
 }
 
 func (m *Mq) retryLoop() {
