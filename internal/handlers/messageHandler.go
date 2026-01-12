@@ -56,10 +56,9 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	_, err = conn.Exec(ctx, `
 		UPDATE data_exchange.message_queue_log
 		SET transferred = true,
-		    transfer_time = now(),
-		    mq_id = $1
-		WHERE message_id = $2
-	`, deliveryTag, messageID)
+    	transfer_time = now()
+		WHERE message_id = $1
+	`, messageID)
 
 	if err != nil {
 		log.Printf("failed to update log table for message %s: %v", messageID, err)
