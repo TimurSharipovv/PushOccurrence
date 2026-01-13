@@ -56,7 +56,7 @@ func main() {
 		log.Printf("listening on channel: %s", channel)
 	}
 
-	rabbit := mq.NewMq(cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
+	rabbit := mq.NewMq(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
 	log.Println("service started, waiting for notifications...")

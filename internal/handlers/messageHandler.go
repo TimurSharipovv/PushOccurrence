@@ -47,7 +47,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		return
 	}
 
-	deliveryTag, err := rabbit.Publish(body)
+	err = rabbit.Publish(body)
 	if err != nil {
 		log.Printf("failed to publish message %s: %v", messageID, err)
 		return
@@ -66,8 +66,5 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	}
 
 	log.Printf(
-		"message %s successfully sent to RabbitMQ, deliveryTag=%d",
-		messageID,
-		deliveryTag,
-	)
+		"message %s successfully sent to mq", messageID)
 }
