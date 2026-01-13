@@ -66,7 +66,7 @@ func NewMq(ctx context.Context, url, queue string) *Mq {
 				continue
 			}
 
-			log.Println("RabbitMQ connected successfully")
+			log.Println("mq connected successfully")
 
 			mq := &Mq{
 				Conn:        conn,
