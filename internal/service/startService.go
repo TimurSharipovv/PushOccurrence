@@ -2,16 +2,12 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"PushOccurrence/config"
 	"PushOccurrence/internal/db"
-	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -24,37 +20,16 @@ func StartService() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
-	cfg, err := config.Load("config/config.json")
-	if err != nil {
-		log.Fatalf("can't load config: %v", err)
-	}
+	cfg := LoadConfig("config/config.json")
 
-	pgConnStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.Database,
-		cfg.Postgres.SSLMode,
-	)
+	pgConnStr := BuildConnString(cfg)
 
 	db.Init(ctx, pgConnStr)
 	defer db.Close(ctx)
 
-	listenConn, err := db.Pool.Acquire(ctx)
-	if err != nil {
-		log.Fatalf("failed to acquire connection for listen: %v", err)
-	}
-	defer listenConn.Release()
+	listenConn := AcquireConn(ctx)
 
-	for _, channel := range cfg.Listener.Channels {
-		_, err := listenConn.Exec(ctx, "LISTEN "+channel)
-		if err != nil {
-			log.Fatalf("failed to listen on %s: %v", channel, err)
-		}
-		log.Printf("listening on channel: %s", channel)
-	}
+	ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
 	rabbit := mq.NewMq(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
@@ -63,40 +38,7 @@ func StartService() {
 
 	notifyCh := make(chan *pgconn.Notification)
 
-	go func() {
-		for {
-			notification, err := listenConn.Conn().WaitForNotification(ctx)
-			if err != nil {
-				log.Printf("error waiting for notify: %v", err)
-				time.Sleep(2 * time.Second)
-				continue
-			}
+	go ListenNotifications(ctx, listenConn, notifyCh)
 
-			select {
-			case notifyCh <- notification:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	for {
-		select {
-		case notification := <-notifyCh:
-			payload := notification.Payload
-			channel := notification.Channel
-
-			log.Printf("received notify: channel=%s payload=%s", channel, payload)
-
-			go handlers.HandleMessage(ctx, db.Pool, rabbit, payload)
-
-		case sig := <-sigCh:
-			log.Printf("received signal %s, shutting down...", sig)
-			cancel()
-			time.Sleep(500 * time.Millisecond)
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
+	MainLoop(ctx, notifyCh, sigCh, rabbit)
 }

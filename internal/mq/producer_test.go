@@ -31,7 +31,7 @@ func TestNewMq_RabbitUnavailable(t *testing.T) {
 	start := time.Now()
 	producer := mq.NewMq(
 		ctx,
-		"amqp://guest:guest@localhost:5673/", //неправильный порт
+		"amqp://guest:guest@localhost:5673/",
 		"test_queue",
 	)
 	duration := time.Since(start)
@@ -69,7 +69,6 @@ func TestPublish_WhenConnectionLost(t *testing.T) {
 
 	select {
 	case <-producer.RetryBuffer():
-		//сообщение попало в retry
 	default:
 		t.Fatal("expected message to be pushed into retry buffer")
 	}
