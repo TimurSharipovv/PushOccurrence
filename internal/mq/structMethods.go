@@ -22,7 +22,7 @@ func (m *Mq) Publish(payload []byte) error {
 	if err != nil {
 		log.Printf("Publish error, pushing to retryBuffer: %v", err)
 
-		m.connected.Store(false)
+		m.SetConnected(false)
 
 		select {
 		case m.retryBuffer <- payload:
@@ -43,7 +43,7 @@ func (m *Mq) retryLoop(ctx context.Context) {
 			log.Println("retryLoop stopped")
 			return
 		default:
-			if !m.connected.Load() {
+			if !m.IsConnected() {
 				time.Sleep(500 * time.Millisecond)
 				continue
 			}
@@ -62,7 +62,7 @@ func (m *Mq) retryLoop(ctx context.Context) {
 				)
 				if err != nil {
 					log.Println("retry publish failed:", err)
-					m.connected.Store(false)
+					m.SetConnected(false)
 
 					time.Sleep(2 * time.Second)
 					select {

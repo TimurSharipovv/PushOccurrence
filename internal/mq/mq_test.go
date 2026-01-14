@@ -73,3 +73,28 @@ func TestPublish_WhenConnectionLost(t *testing.T) {
 		t.Fatal("expected message to be pushed into retry buffer")
 	}
 }
+
+func TestMonitor_DetectsConnectionLost(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mq := mq.NewMq(ctx, "amqp://guest:guest@localhost:5672/", "test_queue")
+	if mq == nil {
+		t.Fatal("mq is nill")
+	}
+
+	if !mq.IsConnected() {
+		t.Fatalf("expected to be connected initially")
+	}
+
+	err := mq.Channel.Close()
+	if err != nil {
+		t.Fatalf("failed to close chan: %v", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	if mq.IsConnected() {
+		t.Fatal("expected monitor to detect lost conn")
+	}
+}

@@ -67,12 +67,24 @@ func NewMq(ctx context.Context, url, queue string) *Mq {
 				confirms:    ch.NotifyPublish(make(chan amqp.Confirmation, 100)),
 				retryBuffer: make(chan []byte, 100),
 			}
-			mq.connected.Store(true)
-			go mq.retryLoop(ctx)
+			mq.SetConnected(true)
+			go mq.MonitorConnection(ctx)
 
 			return mq
 		}
 	}
+}
+
+func (m *Mq) IsConnected() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.connected
+}
+
+func (m *Mq) SetConnected(v bool) {
+	m.mu.Lock()
+	m.connected = v
+	m.mu.Unlock()
 }
 
 // тестовый набор

@@ -1,7 +1,7 @@
 package mq
 
 import (
-	"sync/atomic"
+	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -12,5 +12,6 @@ type Mq struct {
 	Queue       string
 	retryBuffer chan []byte
 	confirms    <-chan amqp.Confirmation
-	connected   atomic.Bool
+	connected   bool
+	mu          sync.RWMutex
 }
