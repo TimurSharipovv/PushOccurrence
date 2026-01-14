@@ -3,6 +3,7 @@ package mq
 import (
 	"context"
 	"log"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -14,6 +15,7 @@ type Mq struct {
 	Queue       string
 	retryBuffer chan []byte
 	confirms    <-chan amqp.Confirmation
+	connected   atomic.Bool
 }
 
 func NewMq(ctx context.Context, url, queue string) *Mq {
@@ -75,7 +77,7 @@ func NewMq(ctx context.Context, url, queue string) *Mq {
 				confirms:    ch.NotifyPublish(make(chan amqp.Confirmation, 100)),
 				retryBuffer: make(chan []byte, 100),
 			}
-			// запускаем retryLoop для сообщений, которые не удалось отправить
+			mq.connected.Store(true)
 			go mq.retryLoop(ctx)
 
 			return mq
@@ -84,16 +86,6 @@ func NewMq(ctx context.Context, url, queue string) *Mq {
 }
 
 func (m *Mq) Publish(payload []byte) error {
-	if m.Channel == nil {
-		log.Println("Publish failed: channel is nil, putting message to retryBuffer")
-		select {
-		case m.retryBuffer <- payload:
-		default:
-			log.Println("retryBuffer full, dropping message")
-		}
-		return nil
-	}
-
 	err := m.Channel.Publish(
 		"",
 		m.Queue,
@@ -106,37 +98,58 @@ func (m *Mq) Publish(payload []byte) error {
 	)
 	if err != nil {
 		log.Printf("Publish error, pushing to retryBuffer: %v", err)
+
+		m.connected.Store(false)
+
 		select {
 		case m.retryBuffer <- payload:
 		default:
 			log.Println("retryBuffer full, dropping message")
 		}
+
 		return err
 	}
 
 	return nil
 }
 
-// retryLoop повторно отправляет сообщения из retryBuffer
 func (m *Mq) retryLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("retryLoop stopped")
 			return
-		case msg := <-m.retryBuffer:
-			if err := m.Publish(msg); err != nil {
-				// если не удалось, возвращаем в очередь через 2 сек
-				go func(msgCopy []byte) {
+		default:
+			if !m.connected.Load() {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			select {
+			case msg := <-m.retryBuffer:
+				err := m.Channel.Publish(
+					"",
+					m.Queue,
+					false,
+					false,
+					amqp.Publishing{
+						ContentType: "application/json",
+						Body:        msg,
+					},
+				)
+				if err != nil {
+					log.Println("retry publish failed:", err)
+					m.connected.Store(false)
+
 					time.Sleep(2 * time.Second)
 					select {
-					case m.retryBuffer <- msgCopy:
+					case m.retryBuffer <- msg:
 					default:
 						log.Println("retryBuffer full, dropping message")
 					}
-				}(msg)
-			} else {
-				log.Println("retry successful")
+				}
+			default:
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 	}
@@ -150,4 +163,14 @@ func (m *Mq) Close() {
 	if m.Conn != nil {
 		m.Conn.Close()
 	}
+}
+
+// тестовый набор
+type Producer interface {
+	Publish(body []byte) error
+	Close() error
+}
+
+func (m *Mq) RetryBuffer() <-chan []byte {
+	return m.retryBuffer
 }
