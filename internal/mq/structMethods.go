@@ -77,3 +77,17 @@ func (m *Mq) retryLoop(ctx context.Context) {
 		}
 	}
 }
+
+func (m *Mq) Close() {
+	if m.Channel != nil {
+		m.Channel.Close()
+	}
+	if m.Conn != nil {
+		m.Conn.Close()
+	}
+}
+
+// Тестовый набор
+func (m *Mq) RetryBuffer() <-chan []byte {
+	return m.retryBuffer
+}

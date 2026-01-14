@@ -75,22 +75,8 @@ func NewMq(ctx context.Context, url, queue string) *Mq {
 	}
 }
 
-// Close закрывает соединение и канал
-func (m *Mq) Close() {
-	if m.Channel != nil {
-		m.Channel.Close()
-	}
-	if m.Conn != nil {
-		m.Conn.Close()
-	}
-}
-
 // тестовый набор
 type Producer interface {
 	Publish(body []byte) error
 	Close() error
-}
-
-func (m *Mq) RetryBuffer() <-chan []byte {
-	return m.retryBuffer
 }
