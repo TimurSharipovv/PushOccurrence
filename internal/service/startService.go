@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func main() {
+func StartService() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
