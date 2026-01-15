@@ -7,11 +7,12 @@ import (
 )
 
 type Mq struct {
-	Conn        *amqp.Connection
-	Channel     *amqp.Channel
-	Queue       string
-	retryBuffer chan []byte
-	confirms    <-chan amqp.Confirmation
-	connected   bool
-	mu          sync.RWMutex
+	Conn         *amqp.Connection
+	Channel      *amqp.Channel
+	Queue        string
+	URL          string
+	Messages     chan []byte
+	Buffer       chan []byte
+	Connect      chan bool
+	PublishMutex sync.Mutex
 }

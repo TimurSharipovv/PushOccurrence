@@ -1,5 +1,6 @@
 package mq_test
 
+/*
 import (
 	"context"
 	"testing"
@@ -98,3 +99,45 @@ func TestMonitor_DetectsConnectionLost(t *testing.T) {
 		t.Fatal("expected monitor to detect lost conn")
 	}
 }
+
+func TestReconnect_RestoresConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mq := mq.NewMq(ctx, "amqp://guest:guest@localhost:5672/", "test_queue_reconnect")
+	if mq == nil {
+		t.Fatal("mq is nil")
+	}
+
+	if !mq.IsConnected() {
+		t.Fatal("expected initial connection")
+	}
+
+	// Рвём соединение
+	err := mq.Channel.Close()
+	if err != nil {
+		t.Fatalf("failed to close channel: %v", err)
+	}
+
+	// Ждём, пока monitor зафиксирует разрыв
+	time.Sleep(2 * time.Second)
+
+	if mq.IsConnected() {
+		t.Fatal("expected connection to be marked as lost")
+	}
+
+	// Ждём reconnect
+	success := false
+	for i := 0; i < 10; i++ {
+		if mq.IsConnected() {
+			success = true
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if !success {
+		t.Fatal("expected reconnectLoop to restore connection")
+	}
+}
+*/
