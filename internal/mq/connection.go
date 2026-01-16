@@ -8,8 +8,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func (mq *Mq) connect(rabbitURL string) error {
-	conn, err := amqp.Dial(rabbitURL)
+func (mq *Mq) connect(url string) error {
+	conn, err := amqp.Dial(url)
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ func (mq *Mq) connect(rabbitURL string) error {
 
 	mq.Conn = conn
 	mq.Channel = ch
-	log.Println("MQ connected successfully")
+	log.Println("mq connected successfully")
 	return nil
 }
 

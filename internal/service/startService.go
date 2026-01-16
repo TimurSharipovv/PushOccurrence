@@ -31,7 +31,7 @@ func StartService() {
 
 	ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
-	rabbit := mq.CreateMQ(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
+	rabbit := mq.CreateMq(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
 	log.Println("service started, waiting for notifications...")

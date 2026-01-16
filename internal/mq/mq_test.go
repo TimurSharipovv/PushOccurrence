@@ -1,143 +1,105 @@
-package mq_test
+package mq
 
-/*
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
-
-	"PushOccurrence/internal/mq"
 )
 
-func TestPublishSucces(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	m := mq.NewMq(ctx, "amqp://guest:guest@localhost:5672/", "test_queue")
-	if m == nil {
-		t.Fatal("mq is nil, rabbit not available")
-	}
-	defer m.Close()
-
-	err := m.Publish([]byte(`{"test":"ok"}`))
-	if err != nil {
-		t.Fatalf("expected publish success, got error: %v", err)
-	}
-}
-
-func TestNewMq_RabbitUnavailable(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	start := time.Now()
-	producer := mq.NewMq(
-		ctx,
-		"amqp://guest:guest@localhost:5673/",
-		"test_queue",
-	)
-	duration := time.Since(start)
-
-	if producer != nil {
-		t.Fatal("expected nil producer when RabbitMQ is unavailable")
-	}
-
-	if duration < 3*time.Second {
-		t.Fatalf("NewMq returned too early, waited only %v", duration)
-	}
-}
-
-func TestPublish_WhenConnectionLost(t *testing.T) {
+// 1 Тест. нет подключения на старте - надо подключиться(PASS)
+func TestConnectToRabbit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	producer := mq.NewMq(
-		ctx,
-		"amqp://guest:guest@localhost:5672/",
-		"test_queue",
-	)
-	if producer == nil {
-		t.Skip("RabbitMQ not running")
-	}
-	defer producer.Close()
+	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test_queue"
 
-	//Симулируем падение RabbitMQ
-	producer.Conn.Close()
+	mq := CreateMq(ctx, url, queue)
 
-	err := producer.Publish([]byte(`{"event":"test"}`))
-	if err == nil {
-		t.Fatal("expected error when publishing with closed connection")
+	timeout := time.After(200 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("service didnt connect to mq in time")
+		case <-ticker.C:
+			if mq.IsConnected() {
+				t.Log("mq connect successfully")
+				return
+			}
+		}
 	}
+}
+
+// 2 Тест. Соединение упало, должен произойти reconnect(PASS)
+func TestReconnectAfterBrokerRestart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test_queue"
+
+	mq := CreateMq(ctx, url, queue)
+	time.Sleep(10 * time.Second)
+
+	t.Log("STOP RabbitMQ now")
+	time.Sleep(15 * time.Second)
+
+	if mq.IsConnected() {
+		t.Fatal("expected connection to be lost")
+	}
+
+	t.Log("START RabbitMQ now")
+	time.Sleep(15 * time.Second)
+
+	if !mq.IsConnected() {
+		t.Fatal("expected connection to be restored after broker restart")
+	}
+
+	t.Log("reconnect successful")
+}
+
+// 3 Тест. Соединение упало при входящем потоке уведомлений - уведомления  должны записмываться в Buffer
+func TestWriteToBufferAfterConnectionLost(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	log.Println("create new mq")
+	mq := &Mq{
+		Messages: make(chan []byte),
+		Connect:  make(chan bool, 1),
+		Buffer:   make(chan []byte, 1),
+	}
+
+	log.Println("create new mq successfully")
+
+	log.Println("run goroutine")
+	go mq.messageManager(ctx)
+	log.Println("goroutine run successfully")
+
+	mq.Connect <- false
+	log.Println("have no connection to mq")
+
+	mq.Messages <- []byte("test message")
+
+	time.Sleep(300 * time.Millisecond)
 
 	select {
-	case <-producer.RetryBuffer():
-	default:
-		t.Fatal("expected message to be pushed into retry buffer")
-	}
-}
-
-func TestMonitor_DetectsConnectionLost(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	mq := mq.NewMq(ctx, "amqp://guest:guest@localhost:5672/", "test_queue")
-	if mq == nil {
-		t.Fatal("mq is nill")
-	}
-
-	if !mq.IsConnected() {
-		t.Fatalf("expected to be connected initially")
-	}
-
-	err := mq.Channel.Close()
-	if err != nil {
-		t.Fatalf("failed to close chan: %v", err)
-	}
-
-	time.Sleep(2 * time.Second)
-
-	if mq.IsConnected() {
-		t.Fatal("expected monitor to detect lost conn")
-	}
-}
-
-func TestReconnect_RestoresConnection(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	mq := mq.NewMq(ctx, "amqp://guest:guest@localhost:5672/", "test_queue_reconnect")
-	if mq == nil {
-		t.Fatal("mq is nil")
-	}
-
-	if !mq.IsConnected() {
-		t.Fatal("expected initial connection")
-	}
-
-	// Рвём соединение
-	err := mq.Channel.Close()
-	if err != nil {
-		t.Fatalf("failed to close channel: %v", err)
-	}
-
-	// Ждём, пока monitor зафиксирует разрыв
-	time.Sleep(2 * time.Second)
-
-	if mq.IsConnected() {
-		t.Fatal("expected connection to be marked as lost")
-	}
-
-	// Ждём reconnect
-	success := false
-	for i := 0; i < 10; i++ {
-		if mq.IsConnected() {
-			success = true
-			break
+	case payload := <-mq.Buffer:
+		if payload != nil {
+			return
 		}
-		time.Sleep(1 * time.Second)
-	}
-
-	if !success {
-		t.Fatal("expected reconnectLoop to restore connection")
+	case <-time.After(5 * time.Second):
+		t.Fatal("cant write to buffer")
 	}
 }
-*/
+
+// Вспомогательные функции для тестов
+func (mq *Mq) IsConnected() bool {
+	mq.PublishMutex.Lock()
+	defer mq.PublishMutex.Unlock()
+	return mq.Conn != nil
+}

@@ -47,7 +47,6 @@ func (mq *Mq) messageManager(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-
 		case payload := <-mq.Messages:
 			if mq.Conn != nil && !mq.Conn.IsClosed() {
 				mq.cleaningBuffer()
