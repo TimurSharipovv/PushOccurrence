@@ -5,6 +5,8 @@ import (
 	"log"
 	"testing"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // 1 Тест. нет подключения на старте - надо подключиться(PASS)
@@ -62,7 +64,7 @@ func TestReconnectAfterBrokerRestart(t *testing.T) {
 	t.Log("reconnect successful")
 }
 
-// 3 Тест. Соединение упало при входящем потоке уведомлений - уведомления  должны записмываться в Buffer
+// 3 Тест. Соединение упало при входящем потоке уведомлений - уведомления должны записмываться в Buffer(PASS)
 func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -95,6 +97,97 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("cant write to buffer")
 	}
+}
+
+// 4 Тест. все работает хорошо - сообщения должны отправляться в очередь(PASS)
+func TestSendToRabbit(t *testing.T) {
+	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test_queue"
+
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	body := "test message"
+	err = ch.Publish("", queue, false, false, amqp.Publishing{
+		ContentType: "text/plain",
+		Body:        []byte(body),
+	})
+	if err != nil {
+		t.Fatalf("failed to publish message: %v", err)
+	}
+
+	msg, ok, err := ch.Get(queue, true)
+	if err != nil {
+		t.Fatalf("failed to get message %v", err)
+	}
+	if !ok {
+		t.Fatal("no message received from queue")
+	}
+
+	t.Logf("message received successfully %s", string(msg.Body))
+}
+
+// 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
+// При наличии сообщения должны отправляться в очередь и после успешной доставки удаляться(удаление еще не реализовано, проверяем только доставку) из буфера
+// (FAIL, не работает публикация в очередь, хотя метод sendToRabbit успешно публикует сообщения в случае прихода сообщений из бд)
+func TestCleaningBuffer(t *testing.T) {
+	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test_queue"
+
+	mq := &Mq{
+		Buffer:   make(chan []byte, 10),
+		Messages: make(chan []byte, 10),
+		Connect:  make(chan bool, 1),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mq.messageManager(ctx)
+
+	testMsg := []byte("test message")
+	mq.sendToBuffer(testMsg)
+	t.Log("message write successfully")
+
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		t.Fatalf("cant connect to mq %v", err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("cant open channel %v", err)
+	}
+	defer ch.Close()
+
+	mq.Conn = conn
+	mq.Channel = ch
+	mq.Connect <- true
+
+	time.Sleep(2000 * time.Millisecond)
+
+	if len(mq.Buffer) != 0 {
+		t.Fatalf("buffer not empty but should")
+	}
+
+	msg, ok, err := ch.Get(queue, true)
+	if err != nil {
+		t.Fatalf("cant get message %v", err)
+	}
+	if !ok {
+		t.Fatal("messege not deliveried")
+	}
+
+	t.Logf("buffer cleaned successfully %s", string(msg.Body))
 }
 
 // Вспомогательные функции для тестов
