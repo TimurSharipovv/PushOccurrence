@@ -8,36 +8,37 @@ import (
 )
 
 func (mq *Mq) sendToRabbit(payload []byte) {
-	mq.PublishMutex.Lock()
-	defer mq.PublishMutex.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if mq.Conn == nil || mq.Channel == nil {
+	if mq.Conn == nil || mq.Channel == nil || mq.Conn.IsClosed() {
+		log.Println("have no connection, write to buffer")
 		mq.sendToBuffer(payload)
 		return
 	}
 
-	err := mq.Channel.Publish(
+	err := mq.Channel.PublishWithContext(ctx,
 		"",
 		mq.Queue,
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        payload,
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "application/json",
+			Body:         payload,
 		},
 	)
 
-	if err != nil {
-		log.Printf("publish failed %v", err)
-		mq.sendToBuffer(payload)
-		return
-	}
+	failOnError(err, "failed to declare queue")
+	mq.sendToBuffer(payload)
 }
 
 func (mq *Mq) sendToBuffer(payload []byte) {
 	for {
 		select {
 		case mq.Buffer <- payload:
+			log.Printf("message write to buffer successfully")
+			return
 		default:
 			log.Println("buffer full")
 			return
@@ -65,10 +66,30 @@ func (mq *Mq) messageManager(ctx context.Context) {
 }
 
 func (mq *Mq) cleaningBuffer() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	for {
 		select {
 		case payload := <-mq.Buffer:
-			mq.sendToRabbit(payload)
+			if mq.Conn == nil || mq.Channel == nil || mq.Conn.IsClosed() {
+				log.Println("have no connection, write to buffer")
+				return
+			}
+
+			err := mq.Channel.PublishWithContext(ctx,
+				"",
+				mq.Queue,
+				false,
+				false,
+				amqp.Publishing{
+					DeliveryMode: amqp.Persistent,
+					ContentType:  "application/json",
+					Body:         payload,
+				},
+			)
+
+			failOnError(err, "failed to declare queue")
 		default:
 			return
 		}

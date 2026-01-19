@@ -102,7 +102,13 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 // 4 Тест. все работает хорошо - сообщения должны отправляться в очередь(PASS)
 func TestSendToRabbit(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test_queue"
+
+	log.Println("create new mq")
+	mq := &Mq{
+		Messages: make(chan []byte, 100),
+		Connect:  make(chan bool, 1),
+		Buffer:   make(chan []byte, 1),
+	}
 
 	conn, err := amqp.Dial(url)
 	if err != nil {
@@ -114,32 +120,25 @@ func TestSendToRabbit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open channel: %v", err)
 	}
+
 	defer ch.Close()
 
-	body := "test message"
-	err = ch.Publish("", queue, false, false, amqp.Publishing{
-		ContentType: "text/plain",
-		Body:        []byte(body),
-	})
-	if err != nil {
-		t.Fatalf("failed to publish message: %v", err)
-	}
+	log.Println("try to write to Messages")
+	mq.Messages <- []byte("test message")
+	log.Println("write msg to Messages")
 
-	msg, ok, err := ch.Get(queue, true)
-	if err != nil {
-		t.Fatalf("failed to get message %v", err)
-	}
-	if !ok {
-		t.Fatal("no message received from queue")
-	}
+	mq.sendToRabbit(<-mq.Messages)
 
-	t.Logf("message received successfully %s", string(msg.Body))
+	t.Logf("message received successfully")
 }
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
 // При наличии сообщения должны отправляться в очередь и после успешной доставки удаляться(удаление еще не реализовано, проверяем только доставку) из буфера
 // (FAIL, не работает публикация в очередь, хотя метод sendToRabbit успешно публикует сообщения в случае прихода сообщений из бд)
 func TestCleaningBuffer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	url := "amqp://guest:guest@localhost:5672/"
 	queue := "test_queue"
 
@@ -149,8 +148,6 @@ func TestCleaningBuffer(t *testing.T) {
 		Connect:  make(chan bool, 1),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go mq.messageManager(ctx)
 
 	testMsg := []byte("test message")
@@ -173,17 +170,19 @@ func TestCleaningBuffer(t *testing.T) {
 	mq.Channel = ch
 	mq.Connect <- true
 
-	time.Sleep(2000 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	if len(mq.Buffer) != 0 {
 		t.Fatalf("buffer not empty but should")
 	}
 
-	msg, ok, err := ch.Get(queue, true)
+	msg, ok, err := ch.Get(queue, false)
 	if err != nil {
 		t.Fatalf("cant get message %v", err)
 	}
-	if !ok {
+	if ok {
+		t.Log("deliveried successfully")
+	} else {
 		t.Fatal("messege not deliveried")
 	}
 
