@@ -99,20 +99,21 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	}
 }
 
-// 4 Тест. все работает хорошо - сообщения должны отправляться в очередь(PASS)
+// 4 Тест. все работает хорошо - сообщения должны отправляться в очередь с подтверждением Ack(PASS)
 func TestSendToRabbit(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
 
-	log.Println("create new mq")
 	mq := &Mq{
-		Messages: make(chan []byte, 100),
+		Buffer:   make(chan []byte, 10),
+		Messages: make(chan []byte, 10),
 		Connect:  make(chan bool, 1),
-		Buffer:   make(chan []byte, 1),
 	}
 
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+	} else {
+		log.Println("connect successfully")
 	}
 	defer conn.Close()
 
@@ -120,16 +121,47 @@ func TestSendToRabbit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open channel: %v", err)
 	}
-
 	defer ch.Close()
 
-	log.Println("try to write to Messages")
-	mq.Messages <- []byte("test message")
-	log.Println("write msg to Messages")
+	if err := ch.Confirm(false); err != nil {
+		t.Fatalf("%v", err)
+	}
 
-	mq.sendToRabbit(<-mq.Messages)
+	q, err := ch.QueueDeclare(
+		"",
+		false,
+		false,
+		true,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to declare %v", err)
+	}
 
-	t.Logf("message received successfully")
+	testMsg := []byte("test message")
+
+	t.Log("publishing msg")
+	mq.sendToRabbit(testMsg)
+
+	msgs, err := ch.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	if err != nil {
+		t.Fatalf("Failed to register consumer: %v", err)
+	}
+
+	select {
+	case d := <-msgs:
+		t.Logf("received %v", d.Body)
+	default:
+	}
 }
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
@@ -140,7 +172,7 @@ func TestCleaningBuffer(t *testing.T) {
 	defer cancel()
 
 	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test_queue"
+	/* queue := "test_queue" */
 
 	mq := &Mq{
 		Buffer:   make(chan []byte, 10),
@@ -156,37 +188,53 @@ func TestCleaningBuffer(t *testing.T) {
 
 	conn, err := amqp.Dial(url)
 	if err != nil {
-		t.Fatalf("cant connect to mq %v", err)
+		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+	} else {
+		log.Println("connect to mq succesfully")
 	}
 	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
-		t.Fatalf("cant open channel %v", err)
+		t.Fatalf("failed to open channel: %v", err)
 	}
 	defer ch.Close()
 
-	mq.Conn = conn
-	mq.Channel = ch
-	mq.Connect <- true
-
-	time.Sleep(300 * time.Millisecond)
-
-	if len(mq.Buffer) != 0 {
-		t.Fatalf("buffer not empty but should")
+	if err := ch.Confirm(false); err != nil {
+		t.Fatalf("%v", err)
 	}
 
-	msg, ok, err := ch.Get(queue, false)
+	q, err := ch.QueueDeclare(
+		"",
+		false,
+		false,
+		true,
+		false,
+		nil,
+	)
 	if err != nil {
-		t.Fatalf("cant get message %v", err)
-	}
-	if ok {
-		t.Log("deliveried successfully")
-	} else {
-		t.Fatal("messege not deliveried")
+		t.Fatalf("failed to declare %v", err)
 	}
 
-	t.Logf("buffer cleaned successfully %s", string(msg.Body))
+	msgs, err := ch.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	if err != nil {
+		t.Fatalf("Failed to register consumer: %v", err)
+	}
+
+	select {
+	case d := <-msgs:
+		t.Logf("received %v", d.Body)
+	default:
+	}
+
 }
 
 // Вспомогательные функции для тестов

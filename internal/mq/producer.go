@@ -2,7 +2,6 @@ package mq
 
 import (
 	"context"
-	"log"
 )
 
 func CreateMq(ctx context.Context, url, queue string) *Mq {
@@ -19,8 +18,8 @@ func CreateMq(ctx context.Context, url, queue string) *Mq {
 	return mq
 }
 
-func failOnError(err error, msg string) {
+/* func failOnError(err error, msg string) {
 	if err != nil {
 		log.Panicf("%s: %s", msg, err)
 	}
-}
+} */
