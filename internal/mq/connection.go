@@ -20,8 +20,15 @@ func (mq *Mq) connect(url string) error {
 		return err
 	}
 
+	err = ch.Confirm(false)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		log.Printf("cant put ch to confirm mode %v", err)
+		return err
+	}
 	_, err = ch.QueueDeclare(
-		mq.Queue,
+		"test",
 		true,
 		false,
 		false,
@@ -36,7 +43,7 @@ func (mq *Mq) connect(url string) error {
 
 	mq.Conn = conn
 	mq.Channel = ch
-	log.Println("mq connected successfully")
+	log.Println("mq connected successfully; confirm mode enabled")
 	return nil
 }
 

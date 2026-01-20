@@ -102,18 +102,12 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 // 4 Тест. все работает хорошо - сообщения должны отправляться в очередь с подтверждением Ack(PASS)
 func TestSendToRabbit(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test"
 
-	mq := &Mq{
-		Buffer:   make(chan []byte, 10),
-		Messages: make(chan []byte, 10),
-		Connect:  make(chan bool, 1),
-	}
-
+	// Подключаемся к RabbitMQ
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		t.Fatalf("failed to connect to RabbitMQ: %v", err)
-	} else {
-		log.Println("connect successfully")
 	}
 	defer conn.Close()
 
@@ -123,56 +117,58 @@ func TestSendToRabbit(t *testing.T) {
 	}
 	defer ch.Close()
 
-	if err := ch.Confirm(false); err != nil {
-		t.Fatalf("%v", err)
+	err = ch.Confirm(false)
+	if err != nil {
+		t.Fatalf("cant put ch to confirm mod %v", err)
 	}
-
-	q, err := ch.QueueDeclare(
-		"",
-		false,
-		false,
-		true,
-		false,
+	// Создаем очередь
+	_, err = ch.QueueDeclare(
+		queue,
+		true,  // durable
+		false, // autoDelete
+		false, // exclusive
+		false, // noWait
 		nil,
 	)
+
 	if err != nil {
-		t.Fatalf("failed to declare %v", err)
+		t.Fatalf("failed to declare queue: %v", err)
 	}
 
-	testMsg := []byte("test message")
+	mq := &Mq{
+		Conn:    conn,
+		Channel: ch,
+		Queue:   queue,
+	}
 
-	t.Log("publishing msg")
-	mq.sendToRabbit(testMsg)
+	msg := []byte(`{"test": "deferred confirm"}`)
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
+	mq.sendToRabbit(msg)
+
+	deliveredMsg, ok, err := ch.Get(queue, true)
 	if err != nil {
-		t.Fatalf("Failed to register consumer: %v", err)
+		t.Fatalf("failed to get message: %v", err)
+	}
+	if !ok {
+		t.Fatal("message not delivered")
 	}
 
-	select {
-	case d := <-msgs:
-		t.Logf("received %v", d.Body)
-	default:
+	if string(deliveredMsg.Body) != string(msg) {
+		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg)
 	}
+
+	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 }
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
 // При наличии сообщения должны отправляться в очередь и после успешной доставки удаляться(удаление еще не реализовано, проверяем только доставку) из буфера
 // (FAIL, не работает публикация в очередь, хотя метод sendToRabbit успешно публикует сообщения в случае прихода сообщений из бд)
 func TestCleaningBuffer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	url := "amqp://guest:guest@localhost:5672/"
-	/* queue := "test_queue" */
+	queue := "test"
 
 	mq := &Mq{
 		Buffer:   make(chan []byte, 10),
@@ -182,8 +178,8 @@ func TestCleaningBuffer(t *testing.T) {
 
 	go mq.messageManager(ctx)
 
-	testMsg := []byte("test message")
-	mq.sendToBuffer(testMsg)
+	msg := []byte("test message")
+	mq.sendToBuffer(msg)
 	t.Log("message write successfully")
 
 	conn, err := amqp.Dial(url)
@@ -200,44 +196,41 @@ func TestCleaningBuffer(t *testing.T) {
 	}
 	defer ch.Close()
 
-	if err := ch.Confirm(false); err != nil {
-		t.Fatalf("%v", err)
+	err = ch.Confirm(false)
+	if err != nil {
+		t.Fatalf("cant put ch to confirm mod %v", err)
 	}
 
-	q, err := ch.QueueDeclare(
-		"",
+	_, err = ch.QueueDeclare(
+		queue,
 		false,
 		false,
 		true,
 		false,
 		nil,
 	)
+
 	if err != nil {
 		t.Fatalf("failed to declare %v", err)
 	}
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
+	deliveredMsg, ok, err := ch.Get(queue, true)
 	if err != nil {
-		t.Fatalf("Failed to register consumer: %v", err)
+		t.Fatalf("failed to get message: %v", err)
+	}
+	if !ok {
+		t.Fatal("message not delivered")
 	}
 
-	select {
-	case d := <-msgs:
-		t.Logf("received %v", d.Body)
-	default:
+	if string(deliveredMsg.Body) != string(msg) {
+		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg)
 	}
+
+	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 
 }
 
-// Вспомогательные функции для тестов
+// Вспомогательные функции
 func (mq *Mq) IsConnected() bool {
 	mq.PublishMutex.Lock()
 	defer mq.PublishMutex.Unlock()
