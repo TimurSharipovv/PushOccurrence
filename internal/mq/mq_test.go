@@ -104,7 +104,6 @@ func TestSendToRabbit(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
 	queue := "test"
 
-	// Подключаемся к RabbitMQ
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		t.Fatalf("failed to connect to RabbitMQ: %v", err)
@@ -121,7 +120,7 @@ func TestSendToRabbit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cant put ch to confirm mod %v", err)
 	}
-	// Создаем очередь
+
 	_, err = ch.QueueDeclare(
 		queue,
 		true,  // durable
@@ -162,31 +161,17 @@ func TestSendToRabbit(t *testing.T) {
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
 // При наличии сообщения должны отправляться в очередь и после успешной доставки удаляться(удаление еще не реализовано, проверяем только доставку) из буфера
-// (FAIL, не работает публикация в очередь, хотя метод sendToRabbit успешно публикует сообщения в случае прихода сообщений из бд)
+// (PASS)
 func TestCleaningBuffer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test"
-
-	mq := &Mq{
-		Buffer:   make(chan []byte, 10),
-		Messages: make(chan []byte, 10),
-		Connect:  make(chan bool, 1),
-	}
-
-	go mq.messageManager(ctx)
-
-	msg := []byte("test message")
-	mq.sendToBuffer(msg)
-	t.Log("message write successfully")
+	queue := "testQ"
 
 	conn, err := amqp.Dial(url)
 	if err != nil {
-		t.Fatalf("failed to connect to RabbitMQ: %v", err)
-	} else {
-		log.Println("connect to mq succesfully")
+		t.Fatalf("failed to connect: %v", err)
 	}
 	defer conn.Close()
 
@@ -196,38 +181,45 @@ func TestCleaningBuffer(t *testing.T) {
 	}
 	defer ch.Close()
 
-	err = ch.Confirm(false)
-	if err != nil {
-		t.Fatalf("cant put ch to confirm mod %v", err)
+	if err := ch.Confirm(false); err != nil {
+		t.Fatalf("confirm mode error: %v", err)
 	}
 
-	_, err = ch.QueueDeclare(
-		queue,
-		false,
-		false,
-		true,
-		false,
-		nil,
-	)
-
+	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
 	if err != nil {
-		t.Fatalf("failed to declare %v", err)
+		t.Fatalf("queue declare error: %v", err)
 	}
+
+	mq := &Mq{
+		Buffer:   make(chan []byte, 10),
+		Messages: make(chan []byte, 10),
+		Connect:  make(chan bool, 1),
+		Channel:  ch,
+		Queue:    queue,
+	}
+
+	go mq.messageManager(ctx)
+
+	msg := []byte("test message")
+	mq.sendToBuffer(msg)
+
+	mq.Connect <- true
+
+	time.Sleep(200 * time.Millisecond)
 
 	deliveredMsg, ok, err := ch.Get(queue, true)
 	if err != nil {
-		t.Fatalf("failed to get message: %v", err)
+		t.Fatalf("get failed: %v", err)
 	}
 	if !ok {
 		t.Fatal("message not delivered")
 	}
 
 	if string(deliveredMsg.Body) != string(msg) {
-		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg)
+		t.Fatalf("message mismatch")
 	}
 
 	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
-
 }
 
 // Вспомогательные функции

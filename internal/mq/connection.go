@@ -48,7 +48,7 @@ func (mq *Mq) connect(url string) error {
 }
 
 func (mq *Mq) monitor(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -56,14 +56,16 @@ func (mq *Mq) monitor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if mq.Conn == nil || mq.Conn.IsClosed() {
+			if mq.Channel == nil || mq.Conn.IsClosed() {
 				select {
 				case mq.Connect <- false:
+					log.Println("Connect == false")
 				default:
 				}
 			} else {
 				select {
 				case mq.Connect <- true:
+					log.Println("Connect == true")
 				default:
 				}
 			}

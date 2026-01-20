@@ -27,7 +27,6 @@ func (mq *Mq) messageManager(ctx context.Context) {
 	}
 }
 
-// Предварительное условие: При создании подключения/канала вы должны один раз вызвать:
 func (mq *Mq) sendToBuffer(payload []byte) {
 	for {
 		select {
@@ -40,9 +39,6 @@ func (mq *Mq) sendToBuffer(payload []byte) {
 		}
 	}
 }
-
-// err := mq.Channel.Confirm(false)
-// Если вы этого не сделаете, брокер не будет слать подтверждения.
 
 func (mq *Mq) sendToRabbit(payload []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -75,9 +71,9 @@ func (mq *Mq) sendToRabbit(payload []byte) {
 	if confirmation == nil {
 		log.Printf("confirmation is nil %v", err)
 	}
-	// Ждем подтверждения от брокера (WaitContext блокирует выполнение до прихода ACK/NACK или таймаута)
+
 	ok, err := confirmation.WaitContext(ctx)
-	// Если err != nil то ловим NACK от брокера
+
 	if err != nil {
 		log.Printf("Confirmation timeout/error: %v", err)
 		mq.sendToBuffer(payload)
@@ -124,9 +120,9 @@ func (mq *Mq) cleaningBuffer() {
 			if confirmation == nil {
 				log.Printf("confirmation is nil %v", err)
 			}
-			// Ждем подтверждения от брокера (WaitContext блокирует выполнение до прихода ACK/NACK или таймаута)
+
 			ok, err := confirmation.WaitContext(ctx)
-			// Если err != nil (таймаут/отмена контекста) ИЛИ ok == false (NACK от брокера)
+
 			if err != nil {
 				log.Printf("Confirmation timeout/error: %v", err)
 				mq.sendToBuffer(payload)
