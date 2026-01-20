@@ -222,6 +222,56 @@ func TestCleaningBuffer(t *testing.T) {
 	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 }
 
+func TestMonitor(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	mq := &Mq{
+		Connect: make(chan bool, 1),
+	}
+
+	go mq.monitor(ctx)
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		connected := false
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if connected {
+					mq.Channel = nil
+					mq.Conn = nil
+					t.Log("TEST: connection LOST")
+				} else {
+					mq.Channel = &amqp.Channel{}
+					mq.Conn = &amqp.Connection{}
+					t.Log("TEST: connection RESTORED")
+				}
+				connected = !connected
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Log("test finished")
+			return
+		case status := <-mq.Connect:
+			if status {
+				t.Log("true")
+			} else {
+				t.Log("false")
+			}
+		}
+	}
+}
+
 // Вспомогательные функции
 func (mq *Mq) IsConnected() bool {
 	mq.PublishMutex.Lock()

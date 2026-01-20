@@ -48,7 +48,7 @@ func (mq *Mq) connect(url string) error {
 }
 
 func (mq *Mq) monitor(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
