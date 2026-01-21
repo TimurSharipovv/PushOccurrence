@@ -47,7 +47,10 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		return
 	}
 
-	err = rabbit.Publish(body)
+	rabbit.Messages <- mq.Message{
+		MessageId: messageID,
+		Payload:   body,
+	}
 	if err != nil {
 		log.Printf("failed to publish message %s: %v", messageID, err)
 		return

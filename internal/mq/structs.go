@@ -11,8 +11,13 @@ type Mq struct {
 	Channel      *amqp.Channel
 	Queue        string
 	URL          string
-	Messages     chan []byte
-	Buffer       chan []byte
+	Messages     chan Message
+	Buffer       chan Message
 	Connect      chan bool
 	PublishMutex sync.Mutex
+}
+
+type Message struct {
+	MessageId string
+	Payload   []byte
 }

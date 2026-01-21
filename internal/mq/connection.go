@@ -59,13 +59,11 @@ func (mq *Mq) monitor(ctx context.Context) {
 			if mq.Channel == nil || mq.Conn.IsClosed() {
 				select {
 				case mq.Connect <- false:
-					log.Println("Connect == false")
 				default:
 				}
 			} else {
 				select {
 				case mq.Connect <- true:
-					log.Println("Connect == true")
 				default:
 				}
 			}
@@ -77,11 +75,13 @@ func (mq *Mq) connectManager(ctx context.Context, url string) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Println("connect stopping")
 			return
 		case connected := <-mq.Connect:
 			if !connected {
 				log.Println("Attempting reconnect...")
-				if err := mq.connect(url); err != nil {
+				err := mq.connect(url)
+				if err != nil {
 					log.Printf("Reconnect failed: %v", err)
 				}
 			}

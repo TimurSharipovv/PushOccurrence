@@ -1,8 +1,8 @@
-package service
+package db
 
 import (
-	"PushOccurrence/internal/db"
 	"context"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -18,21 +18,25 @@ func ListenNotifications(ctx context.Context, conn *pgxpool.Conn, notifyCh chan<
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
-			log.Printf("error waiting for notify: %v", err)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				log.Println("stopping listenNotifications")
+				return
+			}
+			log.Printf("error waiting notify: %v", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		select {
-		case notifyCh <- notification:
 		case <-ctx.Done():
 			return
+		case notifyCh <- notification:
 		}
 	}
 }
 
 func AcquireConn(ctx context.Context) *pgxpool.Conn {
-	conn, err := db.Pool.Acquire(ctx)
+	conn, err := Pool.Acquire(ctx)
 	if err != nil {
 		log.Fatalf("failed to acquire connection: %v", err)
 	}
@@ -52,7 +56,7 @@ func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <
 	for {
 		select {
 		case notification := <-notifyCh:
-			go handlers.HandleMessage(ctx, db.Pool, rabbit, notification.Payload)
+			go handlers.HandleMessage(ctx, Pool, rabbit, notification.Payload)
 			log.Printf("received notify: channel=%s payload=%s", notification.Channel, notification.Payload)
 
 		case sig := <-sigCh:

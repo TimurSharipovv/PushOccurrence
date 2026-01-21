@@ -17,20 +17,20 @@ func (mq *Mq) messageManager(ctx context.Context) {
 			if connected {
 				mq.cleaningBuffer()
 			}
-		case payload := <-mq.Messages:
+		case msg := <-mq.Messages:
 			if mq.Conn != nil && !mq.Conn.IsClosed() {
-				mq.sendToRabbit(payload)
+				mq.sendToRabbit(msg)
 			} else {
-				mq.sendToBuffer(payload)
+				mq.sendToBuffer(msg)
 			}
 		}
 	}
 }
 
-func (mq *Mq) sendToBuffer(payload []byte) {
+func (mq *Mq) sendToBuffer(msg Message) {
 	for {
 		select {
-		case mq.Buffer <- payload:
+		case mq.Buffer <- msg:
 			log.Printf("message write to buffer successfully")
 			return
 		default:
@@ -40,13 +40,13 @@ func (mq *Mq) sendToBuffer(payload []byte) {
 	}
 }
 
-func (mq *Mq) sendToRabbit(payload []byte) {
+func (mq *Mq) sendToRabbit(msg Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if mq.Channel == nil {
 		log.Println("have no connection")
-		mq.sendToBuffer(payload)
+		mq.sendToBuffer(msg)
 		return
 	}
 
@@ -58,13 +58,13 @@ func (mq *Mq) sendToRabbit(payload []byte) {
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "application/json",
-			Body:         payload,
+			Body:         msg.Payload,
 		},
 	)
 
 	if err != nil {
 		log.Printf("Publish error: %v", err)
-		mq.sendToBuffer(payload)
+		mq.sendToBuffer(msg)
 		return
 	}
 
@@ -76,12 +76,12 @@ func (mq *Mq) sendToRabbit(payload []byte) {
 
 	if err != nil {
 		log.Printf("Confirmation timeout/error: %v", err)
-		mq.sendToBuffer(payload)
+		mq.sendToBuffer(msg)
 	}
 
 	if !ok {
 		log.Println("Message NACKed by broker")
-		mq.sendToBuffer(payload)
+		mq.sendToBuffer(msg)
 	} else {
 		log.Println("Message delivered and confirmed")
 	}
@@ -93,7 +93,7 @@ func (mq *Mq) cleaningBuffer() {
 
 	for {
 		select {
-		case payload := <-mq.Buffer:
+		case msg := <-mq.Buffer:
 			if mq.Channel == nil {
 				log.Println("have no connection, write to buffer")
 				return
@@ -107,13 +107,13 @@ func (mq *Mq) cleaningBuffer() {
 				amqp.Publishing{
 					DeliveryMode: amqp.Persistent,
 					ContentType:  "application/json",
-					Body:         payload,
+					Body:         msg.Payload,
 				},
 			)
 
 			if err != nil {
 				log.Printf("Publish error: %v", err)
-				mq.sendToBuffer(payload)
+				mq.sendToBuffer(msg)
 				return
 			}
 
@@ -125,12 +125,12 @@ func (mq *Mq) cleaningBuffer() {
 
 			if err != nil {
 				log.Printf("Confirmation timeout/error: %v", err)
-				mq.sendToBuffer(payload)
+				mq.sendToBuffer(msg)
 			}
 
 			if !ok {
 				log.Println("Message NACKed by broker")
-				mq.sendToBuffer(payload)
+				mq.sendToBuffer(msg)
 			} else {
 				log.Println("Message delivered and confirmed")
 			}

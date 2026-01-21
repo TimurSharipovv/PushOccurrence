@@ -6,8 +6,8 @@ import (
 
 func CreateMq(ctx context.Context, url, queue string) *Mq {
 	mq := &Mq{
-		Buffer:   make(chan []byte, 100),
-		Messages: make(chan []byte, 100),
+		Buffer:   make(chan Message, 100),
+		Messages: make(chan Message, 100),
 		Connect:  make(chan bool, 1),
 	}
 
@@ -17,9 +17,3 @@ func CreateMq(ctx context.Context, url, queue string) *Mq {
 
 	return mq
 }
-
-/* func failOnError(err error, msg string) {
-	if err != nil {
-		log.Panicf("%s: %s", msg, err)
-	}
-} */

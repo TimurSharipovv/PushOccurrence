@@ -1,6 +1,7 @@
 package mq
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"testing"
@@ -71,9 +72,9 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 
 	log.Println("create new mq")
 	mq := &Mq{
-		Messages: make(chan []byte),
+		Messages: make(chan Message),
 		Connect:  make(chan bool, 1),
-		Buffer:   make(chan []byte, 1),
+		Buffer:   make(chan Message, 1),
 	}
 
 	log.Println("create new mq successfully")
@@ -85,13 +86,16 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	mq.Connect <- false
 	log.Println("have no connection to mq")
 
-	mq.Messages <- []byte("test message")
+	mq.Messages <- Message{
+		MessageId: "8",
+		Payload:   []byte("test_message"),
+	}
 
 	time.Sleep(300 * time.Millisecond)
 
 	select {
-	case payload := <-mq.Buffer:
-		if payload != nil {
+	case msg := <-mq.Buffer:
+		if msg.Payload != nil {
 			return
 		}
 	case <-time.After(5 * time.Second):
@@ -123,10 +127,10 @@ func TestSendToRabbit(t *testing.T) {
 
 	_, err = ch.QueueDeclare(
 		queue,
-		true,  // durable
-		false, // autoDelete
-		false, // exclusive
-		false, // noWait
+		true,
+		false,
+		false,
+		false,
 		nil,
 	)
 
@@ -140,7 +144,12 @@ func TestSendToRabbit(t *testing.T) {
 		Queue:   queue,
 	}
 
-	msg := []byte(`{"test": "deferred confirm"}`)
+	mq.Messages <- Message{
+		MessageId: "8",
+		Payload:   []byte("test_message"),
+	}
+
+	msg := <-mq.Messages
 
 	mq.sendToRabbit(msg)
 
@@ -152,8 +161,8 @@ func TestSendToRabbit(t *testing.T) {
 		t.Fatal("message not delivered")
 	}
 
-	if string(deliveredMsg.Body) != string(msg) {
-		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg)
+	if !bytes.Equal(deliveredMsg.Body, msg.Payload) {
+		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg.Payload)
 	}
 
 	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
@@ -191,8 +200,8 @@ func TestCleaningBuffer(t *testing.T) {
 	}
 
 	mq := &Mq{
-		Buffer:   make(chan []byte, 10),
-		Messages: make(chan []byte, 10),
+		Buffer:   make(chan Message, 10),
+		Messages: make(chan Message, 10),
 		Connect:  make(chan bool, 1),
 		Channel:  ch,
 		Queue:    queue,
@@ -200,7 +209,13 @@ func TestCleaningBuffer(t *testing.T) {
 
 	go mq.messageManager(ctx)
 
-	msg := []byte("test message")
+	mq.Messages <- Message{
+		MessageId: "8",
+		Payload:   []byte("test_message"),
+	}
+
+	msg := <-mq.Messages
+
 	mq.sendToBuffer(msg)
 
 	mq.Connect <- true
@@ -215,13 +230,15 @@ func TestCleaningBuffer(t *testing.T) {
 		t.Fatal("message not delivered")
 	}
 
-	if string(deliveredMsg.Body) != string(msg) {
+	if !bytes.Equal(deliveredMsg.Body, msg.Payload) {
 		t.Fatalf("message mismatch")
 	}
 
-	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
+	t.Logf("message successfully delivered: %s, %s", deliveredMsg.Body, msg.Payload)
 }
 
+// 6 Тест. проверка работоспособности функции monitor - каждые 5 секунд на протяжении 30 секунд подключаем и отключаем брокер.
+// Наша функция должна успешно менять значение в канале Connect при каждом изменении
 func TestMonitor(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -246,11 +263,11 @@ func TestMonitor(t *testing.T) {
 				if connected {
 					mq.Channel = nil
 					mq.Conn = nil
-					t.Log("TEST: connection LOST")
+					t.Log("conn lost")
 				} else {
 					mq.Channel = &amqp.Channel{}
 					mq.Conn = &amqp.Connection{}
-					t.Log("TEST: connection RESTORED")
+					t.Log("conn up")
 				}
 				connected = !connected
 			}

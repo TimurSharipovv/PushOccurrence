@@ -20,6 +20,12 @@ func StartService() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
+	go func() {
+		<-sigCh
+		log.Println("shutdown signal")
+		cancel()
+	}()
+
 	cfg := LoadConfig("config/config.json")
 
 	pgConnStr := BuildConnString(cfg)
@@ -27,9 +33,9 @@ func StartService() {
 	db.Init(ctx, pgConnStr)
 	defer db.Close(ctx)
 
-	listenConn := AcquireConn(ctx)
+	listenConn := db.AcquireConn(ctx)
 
-	ListenChannels(ctx, listenConn, cfg.Listener.Channels)
+	db.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
 	rabbit := mq.CreateMq(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
@@ -38,7 +44,7 @@ func StartService() {
 
 	notifyCh := make(chan *pgconn.Notification)
 
-	go ListenNotifications(ctx, listenConn, notifyCh)
+	go db.ListenNotifications(ctx, listenConn, notifyCh)
 
-	MainLoop(ctx, notifyCh, sigCh, rabbit)
+	db.MainLoop(ctx, notifyCh, sigCh, rabbit)
 }
