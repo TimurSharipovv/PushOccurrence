@@ -112,14 +112,14 @@ JSON
 
 Bash
 
-go run cmd/app/main.go
+go run .cmd/app/
 
 
 Или скомпилируйте бинарный файл:
 
 Bash
 
-go build -o bin/PushOccurrence cmd/app/main.go
+go build -o bin/PushOccurrence .cmd/app
 ./bin/PushOccurrence
 
 
