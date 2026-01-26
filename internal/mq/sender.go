@@ -12,7 +12,7 @@ func (mq *Mq) messageManager(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("messageManager stopping")
+			log.Println("messageManger stopping")
 			return
 		case connected := <-mq.Connect:
 			if connected {

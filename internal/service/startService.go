@@ -41,5 +41,4 @@ func StartService() {
 	go db.ListenNotifications(ctx, listenConn, notifyCh)
 
 	db.MainLoop(ctx, notifyCh, sigCh, rabbit)
-	cancel() // Explicitly cancel context to stop background workers (monitor, connectManager) before closing resources
 }
