@@ -48,6 +48,9 @@ func (mq *Mq) connect(url string) error {
 }
 
 func (mq *Mq) monitor(ctx context.Context) {
+	log.Println("monitor start")
+	defer log.Println("monitor stop")
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -72,6 +75,8 @@ func (mq *Mq) monitor(ctx context.Context) {
 }
 
 func (mq *Mq) connectManager(ctx context.Context, url string) {
+	log.Println("connect manger start")
+	defer log.Println("connect manager stop")
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,6 +84,7 @@ func (mq *Mq) connectManager(ctx context.Context, url string) {
 			return
 		case connected := <-mq.Connect:
 			if !connected {
+				time.Sleep(3 * time.Second)
 				log.Println("Attempting reconnect...")
 				err := mq.connect(url)
 				if err != nil {

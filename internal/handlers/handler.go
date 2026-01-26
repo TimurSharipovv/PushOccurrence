@@ -51,10 +51,6 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		MessageId: messageID,
 		Payload:   body,
 	}
-	if err != nil {
-		log.Printf("failed to publish message %s: %v", messageID, err)
-		return
-	}
 
 	_, err = conn.Exec(ctx, `
 		UPDATE data_exchange.message_queue_log

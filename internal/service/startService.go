@@ -20,18 +20,12 @@ func StartService() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
-	go func() {
-		<-sigCh
-		log.Println("shutdown signal")
-		cancel()
-	}()
-
 	cfg := LoadConfig("config/config.json")
 
 	pgConnStr := BuildConnString(cfg)
 
 	db.Init(ctx, pgConnStr)
-	defer db.Close(ctx)
+	defer db.Close()
 
 	listenConn := db.AcquireConn(ctx)
 

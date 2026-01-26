@@ -9,6 +9,8 @@ import (
 )
 
 func (mq *Mq) messageManager(ctx context.Context) {
+	log.Println("message manger start")
+	defer log.Println("message manager stop")
 	for {
 		select {
 		case <-ctx.Done():
@@ -18,7 +20,7 @@ func (mq *Mq) messageManager(ctx context.Context) {
 				mq.cleaningBuffer()
 			}
 		case msg := <-mq.Messages:
-			if mq.Conn != nil && !mq.Conn.IsClosed() {
+			if mq.Channel != nil && !mq.Conn.IsClosed() {
 				mq.sendToRabbit(msg)
 			} else {
 				mq.sendToBuffer(msg)

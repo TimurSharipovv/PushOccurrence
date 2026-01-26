@@ -21,6 +21,8 @@ func Init(ctx context.Context, connectionString string) {
 	}
 }
 
-func Close(ctx context.Context) {
-	Pool.Close()
+func Close() {
+	if Pool != nil {
+		Pool.Close()
+	}
 }
