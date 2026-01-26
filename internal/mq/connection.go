@@ -47,7 +47,7 @@ func (mq *Mq) connect(url string) error {
 	return nil
 }
 
-func (mq *Mq) monitor(ctx context.Context) {
+func (mq *Mq) Monitor(ctx context.Context) {
 	log.Println("monitor start")
 	defer log.Println("monitor stop")
 

@@ -80,7 +80,7 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	log.Println("create new mq successfully")
 
 	log.Println("run goroutine")
-	go mq.messageManager(ctx)
+	go mq.MessageManager(ctx)
 	log.Println("goroutine run successfully")
 
 	mq.Connect <- false
@@ -207,7 +207,7 @@ func TestCleaningBuffer(t *testing.T) {
 		Queue:    queue,
 	}
 
-	go mq.messageManager(ctx)
+	go mq.MessageManager(ctx)
 
 	mq.Messages <- Message{
 		MessageId: "8",
@@ -247,7 +247,7 @@ func TestMonitor(t *testing.T) {
 		Connect: make(chan bool, 1),
 	}
 
-	go mq.monitor(ctx)
+	go mq.Monitor(ctx)
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)

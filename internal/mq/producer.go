@@ -11,9 +11,9 @@ func CreateMq(ctx context.Context, url, queue string) *Mq {
 		Connect:  make(chan bool, 1),
 	}
 
-	go mq.monitor(ctx)
+	go mq.Monitor(ctx)
 	go mq.connectManager(ctx, url)
-	go mq.messageManager(ctx)
+	go mq.MessageManager(ctx)
 
 	return mq
 }

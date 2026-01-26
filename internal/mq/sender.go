@@ -8,7 +8,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func (mq *Mq) messageManager(ctx context.Context) {
+func (mq *Mq) MessageManager(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

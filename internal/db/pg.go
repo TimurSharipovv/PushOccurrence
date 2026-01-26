@@ -19,7 +19,7 @@ func ListenNotifications(ctx context.Context, conn *pgxpool.Conn, notifyCh chan<
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				log.Println("stopping listenNotifications")
+				log.Println("stopping listenNotifications ")
 				return
 			}
 			log.Printf("error waiting notify: %v", err)
