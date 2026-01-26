@@ -57,6 +57,7 @@ func (mq *Mq) monitor(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Println("monitor stopping")
 			return
 		case <-ticker.C:
 			if mq.Channel == nil || mq.Conn.IsClosed() {
@@ -85,7 +86,7 @@ func (mq *Mq) connectManager(ctx context.Context, url string) {
 		case connected := <-mq.Connect:
 			if !connected {
 				time.Sleep(3 * time.Second)
-				log.Println("Attempting reconnect...")
+				log.Println("Attempting connect")
 				err := mq.connect(url)
 				if err != nil {
 					log.Printf("Reconnect failed: %v", err)
@@ -107,3 +108,8 @@ func (mq *Mq) Close() {
 		_ = mq.Conn.Close()
 	}
 }
+
+/* Проблема: При попытке корректно завершить работу сервиса(ctrl+c) происходит повторное подключение(то есть сервис невозможно корректно остановить)
+Для корректно shutdown я использую context. он передается во все блокирующие функции. Также его слушают все горутины и при <-ctx.Done() должно происходить корректное завершение.
+Для обработки сигналов использую библиотеки "os","os/sygnal"
+Варианты ошибок на мой взгляд: */

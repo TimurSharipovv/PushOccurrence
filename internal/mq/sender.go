@@ -9,11 +9,10 @@ import (
 )
 
 func (mq *Mq) messageManager(ctx context.Context) {
-	log.Println("message manger start")
-	defer log.Println("message manager stop")
 	for {
 		select {
 		case <-ctx.Done():
+			log.Println("messageManager stopping")
 			return
 		case connected := <-mq.Connect:
 			if connected {
