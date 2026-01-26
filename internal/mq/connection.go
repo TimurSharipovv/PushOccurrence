@@ -85,8 +85,14 @@ func (mq *Mq) connectManager(ctx context.Context, url string) {
 			return
 		case connected := <-mq.Connect:
 			if !connected {
-				time.Sleep(3 * time.Second)
-				log.Println("Attempting connect")
+				select {
+				case <-ctx.Done():
+					log.Println("connect stopping during reconnect wait")
+					return
+				case <-time.After(3 * time.Second):
+				}
+
+				log.Println("Attempting reconnect...")
 				err := mq.connect(url)
 				if err != nil {
 					log.Printf("Reconnect failed: %v", err)
