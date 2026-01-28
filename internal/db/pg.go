@@ -52,7 +52,7 @@ func ListenChannels(ctx context.Context, conn *pgxpool.Conn, channels []string) 
 	}
 }
 
-func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <-chan os.Signal, rabbit *mq.Mq) {
+func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <-chan os.Signal, rabbit *mq.Mq, cancel context.CancelFunc) {
 	for {
 		select {
 		case notification := <-notifyCh:
@@ -61,6 +61,7 @@ func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <
 
 		case sig := <-sigCh:
 			log.Printf("received signal %s, shutting down...", sig)
+			cancel()
 			return
 
 		case <-ctx.Done():

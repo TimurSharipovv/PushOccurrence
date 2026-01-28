@@ -28,7 +28,7 @@ func (mq *Mq) connect(url string) error {
 		return err
 	}
 	_, err = ch.QueueDeclare(
-		"test",
+		mq.Queue,
 		true,
 		false,
 		false,
@@ -85,17 +85,22 @@ func (mq *Mq) connectManager(ctx context.Context, url string) {
 			return
 		case connected := <-mq.Connect:
 			if !connected {
+				if ctx.Err() != nil {
+					return
+				}
 				select {
 				case <-ctx.Done():
 					log.Println("connect stopping during reconnect wait")
 					return
 				case <-time.After(3 * time.Second):
-				}
-
-				log.Println("Attempting reconnect...")
-				err := mq.connect(url)
-				if err != nil {
-					log.Printf("Reconnect failed: %v", err)
+					if ctx.Err() != nil {
+						return
+					}
+					log.Println("Attempting reconnect...")
+					err := mq.connect(url)
+					if err != nil {
+						log.Printf("Reconnect failed: %v", err)
+					}
 				}
 			}
 		}
