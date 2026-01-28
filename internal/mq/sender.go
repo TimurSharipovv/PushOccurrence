@@ -14,12 +14,16 @@ func (mq *Mq) MessageManager(ctx context.Context) {
 		case <-ctx.Done():
 			log.Println("messageManger stopping")
 			return
-		case connected := <-mq.Connect:
+		case connected := <-mq.RePublishStatus:
 			if connected {
 				mq.cleaningBuffer()
 			}
 		case msg := <-mq.Messages:
-			if mq.Channel != nil && !mq.Conn.IsClosed() {
+			mq.mutex.RLock()
+			ch := mq.Channel
+			conn := mq.Conn
+			mq.mutex.RUnlock()
+			if ch != nil && conn != nil || !conn.IsClosed() {
 				mq.sendToRabbit(msg)
 			} else {
 				mq.sendToBuffer(msg)

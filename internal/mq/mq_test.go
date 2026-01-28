@@ -72,9 +72,9 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 
 	log.Println("create new mq")
 	mq := &Mq{
-		Messages: make(chan Message),
-		Connect:  make(chan bool, 1),
-		Buffer:   make(chan Message, 1),
+		Messages:      make(chan Message),
+		ConnectStatus: make(chan bool, 1),
+		Buffer:        make(chan Message, 1),
 	}
 
 	log.Println("create new mq successfully")
@@ -83,7 +83,7 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	go mq.MessageManager(ctx)
 	log.Println("goroutine run successfully")
 
-	mq.Connect <- false
+	mq.ConnectStatus <- false
 	log.Println("have no connection to mq")
 
 	mq.Messages <- Message{
@@ -200,11 +200,12 @@ func TestCleaningBuffer(t *testing.T) {
 	}
 
 	mq := &Mq{
-		Buffer:   make(chan Message, 10),
-		Messages: make(chan Message, 10),
-		Connect:  make(chan bool, 1),
-		Channel:  ch,
-		Queue:    queue,
+		Buffer:          make(chan Message, 10),
+		Messages:        make(chan Message, 10),
+		ConnectStatus:   make(chan bool, 1),
+		RePublishStatus: make(chan bool, 1),
+		Channel:         ch,
+		Queue:           queue,
 	}
 
 	go mq.MessageManager(ctx)
@@ -218,7 +219,8 @@ func TestCleaningBuffer(t *testing.T) {
 
 	mq.sendToBuffer(msg)
 
-	mq.Connect <- true
+	mq.ConnectStatus <- true
+	mq.RePublishStatus <- true
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -244,7 +246,7 @@ func TestMonitor(t *testing.T) {
 	defer cancel()
 
 	mq := &Mq{
-		Connect: make(chan bool, 1),
+		ConnectStatus: make(chan bool, 1),
 	}
 
 	go mq.Monitor(ctx)
@@ -279,7 +281,7 @@ func TestMonitor(t *testing.T) {
 		case <-ctx.Done():
 			t.Log("test finished")
 			return
-		case status := <-mq.Connect:
+		case status := <-mq.ConnectStatus:
 			if status {
 				t.Log("true")
 			} else {

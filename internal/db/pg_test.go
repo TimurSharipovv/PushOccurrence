@@ -12,7 +12,7 @@ func TestMonitorStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mq := &mq.Mq{
-		Connect: make(chan bool, 1),
+		ConnectStatus: make(chan bool, 1),
 	}
 
 	done := make(chan struct{})
@@ -59,9 +59,9 @@ func TestMessageManagerStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mq := &mq.Mq{
-		Messages: make(chan mq.Message),
-		Connect:  make(chan bool),
-		Buffer:   make(chan mq.Message, 10),
+		Messages:      make(chan mq.Message),
+		ConnectStatus: make(chan bool),
+		Buffer:        make(chan mq.Message, 10),
 	}
 
 	done := make(chan struct{})
