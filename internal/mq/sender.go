@@ -73,15 +73,11 @@ func (mq *Mq) sendToRabbit(msg Message) {
 		return
 	}
 
-	if confirmation == nil {
-		log.Printf("confirmation is nil %v", err)
-	}
-
 	ok, err := confirmation.WaitContext(ctx)
-
-	if err != nil {
+	if err != nil || !ok {
 		log.Printf("Confirmation timeout/error: %v", err)
 		mq.sendToBuffer(msg)
+		return
 	}
 
 	if !ok {
