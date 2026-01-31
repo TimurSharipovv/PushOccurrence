@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"PushOccurrence/internal/handlers"
@@ -14,15 +15,26 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ListenNotifications(ctx context.Context, conn *pgxpool.Conn, notifyCh chan<- *pgconn.Notification) {
+func ListenNotifications(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	notifyCh chan<- *pgconn.Notification,
+) {
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				log.Println("stopping listenNotifications ")
+			if errors.Is(err, context.Canceled) ||
+				errors.Is(err, context.DeadlineExceeded) {
+				log.Println("ListenNotifications stopped: context canceled")
 				return
 			}
-			log.Printf("error waiting notify: %v", err)
+
+			if isConnectionError(err) {
+				log.Printf("ListenNotifications fatal error: %v", err)
+				return
+			}
+
+			log.Printf("ListenNotifications temporary error: %v", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -68,4 +80,17 @@ func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <
 			return
 		}
 	}
+}
+
+func isConnectionError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "08003", "08006":
+			return true
+		}
+	}
+
+	msg := err.Error()
+	return strings.Contains(msg, "conn closed") || strings.Contains(msg, "EOF") || strings.Contains(msg, "broken pipe")
 }
