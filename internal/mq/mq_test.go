@@ -167,6 +167,38 @@ func TestSendToRabbit(t *testing.T) {
 	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 }
 
+func TestPublish(t *testing.T) {
+	url := "amqp://guest:guest@localhost:5672/"
+	queue := "test"
+
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	err = ch.Confirm(false)
+	if err != nil {
+		t.Fatalf("cant put ch to confirm mod %v", err)
+	}
+
+	_, err = ch.QueueDeclare(
+		queue,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	log.Println("declare queue successfully")
+}
+
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
 // При наличии сообщения должны отправляться в очередь и после успешной доставки удаляться(удаление еще не реализовано, проверяем только доставку) из буфера
 // (PASS)

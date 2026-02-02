@@ -99,11 +99,4 @@ func (mq *Mq) Publish(msg Message) {
 		mq.sendToBuffer(msg)
 		return
 	}
-
-	if !ok {
-		log.Println("Message NACKed by broker")
-		mq.sendToBuffer(msg)
-	} else {
-		log.Println("Message delivered and confirmed")
-	}
 }
