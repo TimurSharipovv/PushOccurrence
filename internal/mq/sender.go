@@ -23,7 +23,7 @@ func (mq *Mq) MessageManager(ctx context.Context) {
 			ch := mq.Channel
 			conn := mq.Conn
 			mq.mutex.RUnlock()
-			if ch != nil && conn != nil || !conn.IsClosed() {
+			if conn != nil && ch != nil && !conn.IsClosed() {
 				mq.sendToRabbit(msg)
 			} else {
 				mq.sendToBuffer(msg)
@@ -106,5 +106,4 @@ func (mq *Mq) Publish(msg Message) {
 	} else {
 		log.Println("Message delivered and confirmed")
 	}
-
 }

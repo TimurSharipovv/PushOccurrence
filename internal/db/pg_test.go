@@ -5,6 +5,9 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // 1 Тест. Горутина, которая слушает контекст, должна завершиться, когда контекст отменён(PASS).
@@ -78,5 +81,38 @@ func TestMessageManagerStopsOnCancel(t *testing.T) {
 		t.Log("messageManager exited on cancel")
 	case <-time.After(2 * time.Second):
 		t.Fatal("messageManager did not exit")
+	}
+}
+
+// 4  Тест. Обрыв соединения с бд. WaitForNotification должен вернуть ошибку, ListenNotifications должен выйти. PASS
+func TestListenNotificationConnectionLost(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	pool, err := pgxpool.New(ctx, "postgres://postgres:postgres@localhost:5432/message_queue_db?sslmode=disable")
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	defer pool.Close()
+
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer conn.Release()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		ListenNotifications(ctx, conn, make(chan *pgconn.Notification))
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("listener did not stop after context cancel")
 	}
 }

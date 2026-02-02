@@ -73,27 +73,20 @@ func (mq *Mq) Monitor(ctx context.Context) {
 
 			connected := conn != nil && ch != nil && !conn.IsClosed()
 
-			mq.mutex.Lock()
-			connect := mq.Connected
-			mq.Connected = connected
-			mq.mutex.Unlock()
-
-			if connect == connected {
-				continue
-			}
-
 			select {
 			case mq.ConnectStatus <- connected:
 			default:
+				log.Println("monitor: ConnectStatus dropped")
 			}
 
 			select {
 			case mq.RePublishStatus <- connected:
 			default:
+				log.Println("monitor: RePublishStatus dropped")
 			}
 
 			if connected {
-				log.Println("monitor: connection is UP")
+				log.Println("monitor: connection is ACTIVE")
 			} else {
 				log.Println("monitor: connection is DOWN")
 			}
@@ -102,7 +95,7 @@ func (mq *Mq) Monitor(ctx context.Context) {
 }
 
 func (mq *Mq) connectManager(ctx context.Context, url string) {
-	log.Println("connect manger start")
+	log.Println("connect manager start")
 	defer log.Println("connect manager stop")
 	for {
 		select {

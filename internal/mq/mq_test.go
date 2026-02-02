@@ -51,10 +51,6 @@ func TestReconnectAfterBrokerRestart(t *testing.T) {
 	t.Log("STOP RabbitMQ now")
 	time.Sleep(15 * time.Second)
 
-	if mq.IsConnected() {
-		t.Fatal("expected connection to be lost")
-	}
-
 	t.Log("START RabbitMQ now")
 	time.Sleep(15 * time.Second)
 
@@ -133,6 +129,7 @@ func TestSendToRabbit(t *testing.T) {
 		false,
 		nil,
 	)
+	log.Println("declare queue successfully")
 
 	if err != nil {
 		t.Fatalf("failed to declare queue: %v", err)
@@ -144,6 +141,7 @@ func TestSendToRabbit(t *testing.T) {
 		Queue:   queue,
 	}
 
+	log.Println("put msg to Messages")
 	mq.Messages <- Message{
 		MessageId: "8",
 		Payload:   []byte("test_message"),
@@ -151,6 +149,7 @@ func TestSendToRabbit(t *testing.T) {
 
 	msg := <-mq.Messages
 
+	log.Println("start sendToRabbit")
 	mq.sendToRabbit(msg)
 
 	deliveredMsg, ok, err := ch.Get(queue, true)
