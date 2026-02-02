@@ -167,36 +167,61 @@ func TestSendToRabbit(t *testing.T) {
 	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 }
 
-func TestPublish(t *testing.T) {
-	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test"
-
-	conn, err := amqp.Dial(url)
+func TestPublish_PutsMessageToBuffer_WhenConnectionLost(t *testing.T) {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
-		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+		t.Fatalf("failed to connect to mq: %v", err)
 	}
-	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("failed to open channel: %v", err)
 	}
-	defer ch.Close()
 
 	err = ch.Confirm(false)
 	if err != nil {
-		t.Fatalf("cant put ch to confirm mod %v", err)
+		t.Fatalf("failed to enable confirm mode: %v", err)
 	}
 
 	_, err = ch.QueueDeclare(
-		queue,
+		"test_queue",
 		true,
 		false,
 		false,
 		false,
 		nil,
 	)
-	log.Println("declare queue successfully")
+	if err != nil {
+		t.Fatalf("queue declare error: %v", err)
+	}
+
+	buffer := make(chan Message, 1)
+
+	mq := &Mq{
+		Conn:    conn,
+		Channel: ch,
+		Queue:   "test_queue",
+		Buffer:  buffer,
+	}
+
+	_ = conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	msg := Message{
+		Payload: []byte(`{"event":"connection_lost"}`),
+	}
+
+	mq.Publish(msg)
+
+	select {
+	case bufferedMsg := <-buffer:
+		if string(bufferedMsg.Payload) != string(msg.Payload) {
+			t.Fatalf("unexpected buffered message")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected message to be written to buffer")
+	}
 }
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
