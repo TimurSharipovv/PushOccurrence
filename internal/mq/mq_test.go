@@ -99,75 +99,8 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	}
 }
 
-// 4 Тест. все работает хорошо - сообщения должны отправляться в очередь с подтверждением Ack(PASS)
-func TestSendToRabbit(t *testing.T) {
-	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test"
-
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		t.Fatalf("failed to connect to RabbitMQ: %v", err)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		t.Fatalf("failed to open channel: %v", err)
-	}
-	defer ch.Close()
-
-	err = ch.Confirm(false)
-	if err != nil {
-		t.Fatalf("cant put ch to confirm mod %v", err)
-	}
-
-	_, err = ch.QueueDeclare(
-		queue,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	log.Println("declare queue successfully")
-
-	if err != nil {
-		t.Fatalf("failed to declare queue: %v", err)
-	}
-
-	mq := &Mq{
-		Conn:    conn,
-		Channel: ch,
-		Queue:   queue,
-	}
-
-	log.Println("put msg to Messages")
-	mq.Messages <- Message{
-		MessageId: "8",
-		Payload:   []byte("test_message"),
-	}
-
-	msg := <-mq.Messages
-
-	log.Println("start sendToRabbit")
-	mq.sendToRabbit(msg)
-
-	deliveredMsg, ok, err := ch.Get(queue, true)
-	if err != nil {
-		t.Fatalf("failed to get message: %v", err)
-	}
-	if !ok {
-		t.Fatal("message not delivered")
-	}
-
-	if !bytes.Equal(deliveredMsg.Body, msg.Payload) {
-		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg.Payload)
-	}
-
-	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
-}
-
-func TestPublish_PutsMessageToBuffer_WhenConnectionLost(t *testing.T) {
+// 4 Тест. при отсутствии соединения Publish должен пиать в буфер(PASS)
+func TestPublishConnLost(t *testing.T) {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		t.Fatalf("failed to connect to mq: %v", err)
@@ -344,6 +277,85 @@ func TestMonitor(t *testing.T) {
 				t.Log("false")
 			}
 		}
+	}
+}
+
+// 7 Тест. все хорошо - сообщение должно успешно доставляться в очередь. PASS
+func TestPublishMessageDelivered(t *testing.T) {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		t.Fatalf("failed to connect to mq: %v", err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	err = ch.Confirm(false)
+	if err != nil {
+		t.Fatalf("failed to enable confirm mode: %v", err)
+	}
+
+	queueName := "test_publish_queue"
+
+	q, err := ch.QueueDeclare(
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("queue declare error: %v", err)
+	}
+
+	buffer := make(chan Message, 1)
+
+	mq := &Mq{
+		Conn:    conn,
+		Channel: ch,
+		Queue:   queueName,
+		Buffer:  buffer,
+	}
+
+	payload := []byte(`{"event":"success_publish"}`)
+
+	msg := Message{
+		Payload: payload,
+	}
+
+	mq.Publish(msg)
+
+	select {
+	case <-buffer:
+		t.Fatal("message should not be written to buffer on successful publish")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	deliveries, err := ch.Consume(
+		q.Name,
+		"",
+		true,
+		true,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to consume: %v", err)
+	}
+
+	select {
+	case d := <-deliveries:
+		if string(d.Body) != string(payload) {
+			t.Fatalf("unexpected message body: %s", d.Body)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("message was not delivered to queue")
 	}
 }
 
