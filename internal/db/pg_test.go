@@ -3,6 +3,7 @@ package db
 import (
 	"PushOccurrence/internal/mq"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -114,5 +115,60 @@ func TestListenNotificationConnectionLost(t *testing.T) {
 
 	case <-time.After(2 * time.Second):
 		t.Fatal("listener did not stop after context cancel")
+	}
+}
+
+// 5 Тест. проверяем функцию IsConnectedError. передаем слайс структур для входа. поле want показывает ожидаемый результат приопределенном err PASS
+func TestIsConnectedError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "pg error connection not exist",
+			err: &pgconn.PgError{
+				Code: "08003",
+			},
+			want: true,
+		},
+		{
+			name: "pg error connection fail",
+			err: &pgconn.PgError{
+				Code: "08006",
+			},
+			want: true,
+		},
+		{
+			name: "pg error unknown code",
+			err: &pgconn.PgError{
+				Code: "23505",
+			},
+			want: false,
+		},
+		{
+			name: "err contains EOF",
+			err:  errors.New("unexpected EOF"),
+			want: true,
+		},
+		{
+			name: "err contains broken pipe",
+			err:  errors.New("broken pipe"),
+			want: true,
+		},
+		{
+			name: "non conn error",
+			err:  errors.New("syntax error"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isConnectionError(tt.err)
+			if result != tt.want {
+				t.Fatalf("isConnectionError() %v, want %v (err %v)", result, tt.want, tt.err)
+			}
+		})
 	}
 }

@@ -15,11 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ListenNotifications(
-	ctx context.Context,
-	conn *pgxpool.Conn,
-	notifyCh chan<- *pgconn.Notification,
-) {
+func ListenNotifications(ctx context.Context, conn *pgxpool.Conn, notifyCh chan<- *pgconn.Notification) {
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
