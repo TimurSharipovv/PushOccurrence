@@ -30,6 +30,7 @@ func StartService(parent context.Context) {
 	cfg := LoadConfig("config/config.json")
 
 	pgConnStr := BuildConnString(cfg)
+	mqConnStr := BuildMQConnString(cfg)
 
 	db.Init(ctx, pgConnStr)
 	defer func() {
@@ -46,7 +47,7 @@ func StartService(parent context.Context) {
 
 	db.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
-	rabbit := mq.CreateMq(ctx, cfg.RabbitMQ.URL, cfg.RabbitMQ.Queue.Name)
+	rabbit := mq.CreateMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
 	log.Println("service started, waiting for notifications...")
