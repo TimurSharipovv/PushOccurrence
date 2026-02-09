@@ -9,9 +9,12 @@ import (
 	"syscall"
 
 	"PushOccurrence/internal/db"
+	"PushOccurrence/internal/db/mongoDb"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func StartService(parent context.Context) {
@@ -31,6 +34,15 @@ func StartService(parent context.Context) {
 
 	pgConnStr := BuildConnString(cfg)
 	mqConnStr := BuildMQConnString(cfg)
+	mongoConnStr := BuildMongoConnString(cfg)
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoConnStr))
+	if err != nil {
+		log.Printf("cant connect to mongo %v", err)
+	}
+
+	repo := mongoDb.NewOutboxRepository(client.Database("outbox"))
+	_ = repo
 
 	db.Init(ctx, pgConnStr)
 	defer func() {
