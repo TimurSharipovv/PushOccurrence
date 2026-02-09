@@ -1,7 +1,7 @@
 {
     "postgres": {
         "host": "localhost",
-        "port": 5432,
+        "port": 5433,
         "database": "message_queue_db",
         "user": "postgres",
         "password": "postgres",
@@ -33,5 +33,11 @@
         "retry_delay_sec": 2,
         "idle_sleep_ms": 500
         }
+    },
+
+    "mongo": {
+        "host": "localhost",
+        "port": 27017,
+        "database": "outbox"
     }
 }

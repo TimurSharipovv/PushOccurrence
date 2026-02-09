@@ -23,3 +23,7 @@ func BuildConnString(cfg *config.Config) string {
 func BuildMQConnString(cfg *config.Config) string {
 	return fmt.Sprintf("amqp://%s:%s@%s:%d/", cfg.RabbitMQ.User, cfg.RabbitMQ.Password, cfg.RabbitMQ.Host, cfg.RabbitMQ.Port)
 }
+
+func BuildMongoConnString(cfg *config.Config) string {
+	return fmt.Sprintf("mongodb://%s:%d/%s", cfg.Mongo.Host, cfg.Mongo.Port, cfg.Mongo.Database)
+}
