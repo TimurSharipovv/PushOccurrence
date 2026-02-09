@@ -8,8 +8,8 @@ import (
 	"sync"
 	"syscall"
 
-	"PushOccurrence/internal/db"
 	"PushOccurrence/internal/db/mongoDb"
+	"PushOccurrence/internal/db/pg"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -44,20 +44,20 @@ func StartService(parent context.Context) {
 	repo := mongoDb.NewOutboxRepository(client.Database("outbox"))
 	_ = repo
 
-	db.Init(ctx, pgConnStr)
+	pg.Init(ctx, pgConnStr)
 	defer func() {
 		log.Println("closing db")
-		db.Close()
+		pg.Close()
 		log.Println("db closed")
 	}()
 
-	listenConn := db.AcquireConn(ctx)
+	listenConn := pg.AcquireConn(ctx)
 	defer func() {
 		log.Println("releasing listenConn")
 		listenConn.Release()
 	}()
 
-	db.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
+	pg.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
 	rabbit := mq.CreateMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
@@ -69,13 +69,13 @@ func StartService(parent context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		db.ListenNotifications(ctx, listenConn, notifyCh)
+		pg.ListenNotifications(ctx, listenConn, notifyCh)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		db.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
+		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
 	}()
 
 	<-ctx.Done()
