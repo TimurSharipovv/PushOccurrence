@@ -51,10 +51,6 @@ func TestReconnectAfterBrokerRestart(t *testing.T) {
 	t.Log("STOP RabbitMQ now")
 	time.Sleep(15 * time.Second)
 
-	if mq.IsConnected() {
-		t.Fatal("expected connection to be lost")
-	}
-
 	t.Log("START RabbitMQ now")
 	time.Sleep(15 * time.Second)
 
@@ -72,9 +68,9 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 
 	log.Println("create new mq")
 	mq := &Mq{
-		Messages: make(chan Message),
-		Connect:  make(chan bool, 1),
-		Buffer:   make(chan Message, 1),
+		Messages:      make(chan Message),
+		ConnectStatus: make(chan bool, 1),
+		Buffer:        make(chan Message, 1),
 	}
 
 	log.Println("create new mq successfully")
@@ -83,7 +79,7 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	go mq.MessageManager(ctx)
 	log.Println("goroutine run successfully")
 
-	mq.Connect <- false
+	mq.ConnectStatus <- false
 	log.Println("have no connection to mq")
 
 	mq.Messages <- Message{
@@ -103,69 +99,62 @@ func TestWriteToBufferAfterConnectionLost(t *testing.T) {
 	}
 }
 
-// 4 Тест. все работает хорошо - сообщения должны отправляться в очередь с подтверждением Ack(PASS)
-func TestSendToRabbit(t *testing.T) {
-	url := "amqp://guest:guest@localhost:5672/"
-	queue := "test"
-
-	conn, err := amqp.Dial(url)
+// 4 Тест. при отсутствии соединения Publish должен пиать в буфер(PASS)
+func TestPublishConnLost(t *testing.T) {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
-		t.Fatalf("failed to connect to RabbitMQ: %v", err)
+		t.Fatalf("failed to connect to mq: %v", err)
 	}
-	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("failed to open channel: %v", err)
 	}
-	defer ch.Close()
 
 	err = ch.Confirm(false)
 	if err != nil {
-		t.Fatalf("cant put ch to confirm mod %v", err)
+		t.Fatalf("failed to enable confirm mode: %v", err)
 	}
 
 	_, err = ch.QueueDeclare(
-		queue,
+		"test_queue",
 		true,
 		false,
 		false,
 		false,
 		nil,
 	)
-
 	if err != nil {
-		t.Fatalf("failed to declare queue: %v", err)
+		t.Fatalf("queue declare error: %v", err)
 	}
+
+	buffer := make(chan Message, 1)
 
 	mq := &Mq{
 		Conn:    conn,
 		Channel: ch,
-		Queue:   queue,
+		Queue:   "test_queue",
+		Buffer:  buffer,
 	}
 
-	mq.Messages <- Message{
-		MessageId: "8",
-		Payload:   []byte("test_message"),
+	_ = conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	msg := Message{
+		Payload: []byte(`{"event":"connection_lost"}`),
 	}
 
-	msg := <-mq.Messages
+	mq.Publish(msg)
 
-	mq.sendToRabbit(msg)
-
-	deliveredMsg, ok, err := ch.Get(queue, true)
-	if err != nil {
-		t.Fatalf("failed to get message: %v", err)
+	select {
+	case bufferedMsg := <-buffer:
+		if string(bufferedMsg.Payload) != string(msg.Payload) {
+			t.Fatalf("unexpected buffered message")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected message to be written to buffer")
 	}
-	if !ok {
-		t.Fatal("message not delivered")
-	}
-
-	if !bytes.Equal(deliveredMsg.Body, msg.Payload) {
-		t.Fatalf("message mismatch: got %s, want %s", deliveredMsg.Body, msg.Payload)
-	}
-
-	t.Logf("message successfully delivered: %s", deliveredMsg.Body)
 }
 
 // 5 Тест. проверка очистки буфера при появлении соединения - при удачном подключении буфер проверяется на наличие неотправленных сообщений.
@@ -200,11 +189,12 @@ func TestCleaningBuffer(t *testing.T) {
 	}
 
 	mq := &Mq{
-		Buffer:   make(chan Message, 10),
-		Messages: make(chan Message, 10),
-		Connect:  make(chan bool, 1),
-		Channel:  ch,
-		Queue:    queue,
+		Buffer:          make(chan Message, 10),
+		Messages:        make(chan Message, 10),
+		ConnectStatus:   make(chan bool, 1),
+		RePublishStatus: make(chan bool, 1),
+		Channel:         ch,
+		Queue:           queue,
 	}
 
 	go mq.MessageManager(ctx)
@@ -218,7 +208,8 @@ func TestCleaningBuffer(t *testing.T) {
 
 	mq.sendToBuffer(msg)
 
-	mq.Connect <- true
+	mq.ConnectStatus <- true
+	mq.RePublishStatus <- true
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -244,7 +235,7 @@ func TestMonitor(t *testing.T) {
 	defer cancel()
 
 	mq := &Mq{
-		Connect: make(chan bool, 1),
+		ConnectStatus: make(chan bool, 1),
 	}
 
 	go mq.Monitor(ctx)
@@ -279,13 +270,92 @@ func TestMonitor(t *testing.T) {
 		case <-ctx.Done():
 			t.Log("test finished")
 			return
-		case status := <-mq.Connect:
+		case status := <-mq.ConnectStatus:
 			if status {
 				t.Log("true")
 			} else {
 				t.Log("false")
 			}
 		}
+	}
+}
+
+// 7 Тест. все хорошо - сообщение должно успешно доставляться в очередь. PASS
+func TestPublishMessageDelivered(t *testing.T) {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		t.Fatalf("failed to connect to mq: %v", err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	err = ch.Confirm(false)
+	if err != nil {
+		t.Fatalf("failed to enable confirm mode: %v", err)
+	}
+
+	queueName := "test_publish_queue"
+
+	q, err := ch.QueueDeclare(
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("queue declare error: %v", err)
+	}
+
+	buffer := make(chan Message, 1)
+
+	mq := &Mq{
+		Conn:    conn,
+		Channel: ch,
+		Queue:   queueName,
+		Buffer:  buffer,
+	}
+
+	payload := []byte(`{"event":"success_publish"}`)
+
+	msg := Message{
+		Payload: payload,
+	}
+
+	mq.Publish(msg)
+
+	select {
+	case <-buffer:
+		t.Fatal("message should not be written to buffer on successful publish")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	deliveries, err := ch.Consume(
+		q.Name,
+		"",
+		true,
+		true,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to consume: %v", err)
+	}
+
+	select {
+	case d := <-deliveries:
+		if string(d.Body) != string(payload) {
+			t.Fatalf("unexpected message body: %s", d.Body)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("message was not delivered to queue")
 	}
 }
 

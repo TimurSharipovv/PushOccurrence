@@ -24,6 +24,7 @@ func (mq *Mq) connect(url string) error {
 	if err != nil {
 		ch.Close()
 		conn.Close()
+
 		log.Printf("cant put ch to confirm mode %v", err)
 		return err
 	}
@@ -41,8 +42,11 @@ func (mq *Mq) connect(url string) error {
 		return err
 	}
 
+	mq.mutex.Lock()
 	mq.Conn = conn
 	mq.Channel = ch
+	mq.mutex.Unlock()
+
 	log.Println("mq connected successfully; confirm mode enabled")
 	return nil
 }
@@ -59,31 +63,46 @@ func (mq *Mq) Monitor(ctx context.Context) {
 		case <-ctx.Done():
 			log.Println("monitor stopping")
 			return
+
 		case <-ticker.C:
-			if mq.Channel == nil || mq.Conn.IsClosed() {
-				select {
-				case mq.Connect <- false:
-				default:
-				}
+
+			mq.mutex.RLock()
+			conn := mq.Conn
+			ch := mq.Channel
+			mq.mutex.RUnlock()
+
+			connected := conn != nil && ch != nil && !conn.IsClosed()
+
+			select {
+			case mq.ConnectStatus <- connected:
+			default:
+				log.Println("monitor: ConnectStatus dropped")
+			}
+
+			select {
+			case mq.RePublishStatus <- connected:
+			default:
+				log.Println("monitor: RePublishStatus dropped")
+			}
+
+			if connected {
+				log.Println("monitor: connection is ACTIVE")
 			} else {
-				select {
-				case mq.Connect <- true:
-				default:
-				}
+				log.Println("monitor: connection is DOWN")
 			}
 		}
 	}
 }
 
 func (mq *Mq) connectManager(ctx context.Context, url string) {
-	log.Println("connect manger start")
+	log.Println("connect manager start")
 	defer log.Println("connect manager stop")
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("connect stopping")
 			return
-		case connected := <-mq.Connect:
+		case connected := <-mq.ConnectStatus:
 			if !connected {
 				if ctx.Err() != nil {
 					return
@@ -111,11 +130,14 @@ func (mq *Mq) Close() {
 	mq.PublishMutex.Lock()
 	defer mq.PublishMutex.Unlock()
 
+	mq.mutex.Lock()
 	if mq.Channel != nil {
 		_ = mq.Channel.Close()
+		mq.Channel = nil
 	}
-
 	if mq.Conn != nil {
 		_ = mq.Conn.Close()
+		mq.Conn = nil
 	}
+	mq.mutex.Unlock()
 }

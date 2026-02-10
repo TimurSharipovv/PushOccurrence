@@ -15,7 +15,10 @@
     },
 
     "rabbitmq": {
-        "url": "amqp://guest:guest@localhost:5672/",
+        "host": "localhost",
+        "port": 5672,
+        "user": "guest",
+        "password": "guest",
 
         "queue": {
             "name": "message_queue",

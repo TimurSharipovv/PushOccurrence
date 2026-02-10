@@ -16,9 +16,11 @@ type PostgresConfig struct {
 }
 
 type RabbitMQConfig struct {
-	URL   string      `json:"url"`
-	Queue QueueConfig `json:"queue"`
-	Retry RetryConfig `json:"retry"`
+	Queue    QueueConfig `json:"queue"`
+	Host     string      `json:"host"`
+	Port     int         `json:"port"`
+	User     string      `json:"user"`
+	Password string      `json:"password"`
 }
 
 type QueueConfig struct {

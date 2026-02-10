@@ -19,3 +19,7 @@ func LoadConfig(path string) *config.Config {
 func BuildConnString(cfg *config.Config) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Database, cfg.Postgres.SSLMode)
 }
+
+func BuildMQConnString(cfg *config.Config) string {
+	return fmt.Sprintf("amqp://%s:%s@%s:%d/", cfg.RabbitMQ.User, cfg.RabbitMQ.Password, cfg.RabbitMQ.Host, cfg.RabbitMQ.Port)
+}
