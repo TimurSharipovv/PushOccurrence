@@ -12,7 +12,7 @@ func (r *outboxRepository) FetchPending(ctx context.Context, limit int) ([]Outbo
 		"status": "pending",
 	}
 
-	opts := options.Find().SetSort(bson.M{"created_at": 1}).SetLimit(int64(limit))
+	opts := options.Find().SetSort(bson.M{"createdAt": 1}).SetLimit(int64(limit))
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {

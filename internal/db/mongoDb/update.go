@@ -5,22 +5,63 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func (r *outboxRepository) MarkProcessing(ctx context.Context, messageId string) error {
-	_, err := r.collection.UpdateOne(ctx, bson.M{"message_id": messageId}, bson.M{"$Set": bson.M{"status": "processing", "updated_at": time.Now()}})
+	oid, err := primitive.ObjectIDFromHex(messageId)
+	if err != nil {
+		return err
+	}
 
+	filter := bson.M{"_id": oid}
+	update := bson.M{
+		"$set": bson.M{
+			"status":    "processing",
+			"updatedAt": time.Now(),
+		},
+	}
+
+	_, err = r.collection.UpdateOne(ctx, filter, update)
 	return err
 }
 
 func (r *outboxRepository) MarkSent(ctx context.Context, messageId string) error {
-	_, err := r.collection.UpdateOne(ctx, bson.M{"message_id": messageId}, bson.M{"$Set": bson.M{"status": "sent", "updated_at": time.Now()}})
+	oid, err := primitive.ObjectIDFromHex(messageId)
+	if err != nil {
+		return err
+	}
 
+	filter := bson.M{"_id": oid}
+	update := bson.M{
+		"$set": bson.M{
+			"status":    "sent",
+			"updatedAt": time.Now(),
+		},
+	}
+
+	_, err = r.collection.UpdateOne(ctx, filter, update)
 	return err
 }
 
 func (r *outboxRepository) MarkFailed(ctx context.Context, messageId string, errMsg string) error {
-	_, err := r.collection.UpdateOne(ctx, bson.M{"messageId": messageId}, bson.M{"$Set": bson.M{"status": "failed", "updated_at": time.Now(), "last_error": errMsg}, "$inc": bson.M{"attempts": 1}})
+	oid, err := primitive.ObjectIDFromHex(messageId)
+	if err != nil {
+		return err
+	}
 
+	filter := bson.M{"_id": oid}
+	update := bson.M{
+		"$set": bson.M{
+			"status":    "failed",
+			"updatedAt": time.Now(),
+			"last_error": errMsg,
+		},
+		"$inc": bson.M{
+			"attempts": 1,
+		},
+	}
+
+	_, err = r.collection.UpdateOne(ctx, filter, update)
 	return err
 }
