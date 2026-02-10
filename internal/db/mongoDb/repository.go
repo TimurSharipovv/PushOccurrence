@@ -1,15 +1,13 @@
 package mongoDb
 
 import (
-	"go.mongodb.org/mongo-driver/mongo"
+	"context"
 )
 
-type OutboxRepository struct {
-	collection *mongo.Collection
-}
-
-func NewOutboxRepository(db *mongo.Database) *OutboxRepository {
-	return &OutboxRepository{
-		collection: db.Collection("messages"),
-	}
+type OutboxRepository interface {
+	Insert(ctx context.Context, msg OutboxMessage) error
+	FetchPending(ctx context.Context, limit int) ([]OutboxMessage, error)
+	MarkProcessing(ctx context.Context, id string) error
+	MarkSent(ctx context.Context, id string) error
+	MarkFailed(ctx context.Context, id string, errMsg string) error
 }
