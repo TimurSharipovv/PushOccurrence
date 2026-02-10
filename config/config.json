@@ -2,7 +2,7 @@
     "postgres": {
         "host": "localhost",
         "port": 5433,
-        "database": "message_queue_db",
+        "database": "mydb",
         "user": "postgres",
         "password": "postgres",
         "ssl_mode": "disable"
