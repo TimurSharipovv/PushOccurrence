@@ -10,7 +10,32 @@ services:
       - "27017:27017"
 
     volumes:
-      - mongo_data:/data/db
+      - mongo_data:/data/db    
+
+  rabbitmq:
+    image: rabbitmq
+    container_name: rabbitmq     
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbit_data:/data/mq
+
+  postgres:
+    build: .
+    container_name: postgresdb
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:
 
 volumes:
   mongo_data:
+  rabbit_data:
+  postgres_data:
