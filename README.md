@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS data_exchange.message_queue_log_data (
     message_body BYTEA -- или JSONB/TEXT
 );
 
+### 📦 Реализация паттерна Outbox
+
 
 > Примечание: Типы данных для message_id должны соответствовать (в коде используется string).
 ## ⚙️ Конфигурация
