@@ -13,8 +13,6 @@ import (
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func StartService(parent context.Context) {
@@ -36,19 +34,27 @@ func StartService(parent context.Context) {
 	mqConnStr := BuildMQConnString(cfg)
 	mongoConnStr := BuildMongoConnString(cfg)
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoConnStr))
+	mongoClient, err := mongoDb.Connect(ctx, mongoConnStr)
 	if err != nil {
-		log.Printf("cant connect to mongo %v", err)
+		log.Fatalf("failed to connect to mongo %v", err)
 	}
+	defer func() {
+		log.Println("closing mongo conn")
+		err := mongoClient.Disconnect(ctx)
+		if err != nil {
+			log.Println("err diconnect mongo")
+		}
+		log.Println("mongo conn closed successfully")
+	}()
 
-	repo := mongoDb.NewOutboxRepository(client.Database("outbox"))
+	repo := mongoDb.NewOutboxRepository(mongoClient.Database(cfg.Mongo.Database))
 	_ = repo
 
 	pg.Init(ctx, pgConnStr)
 	defer func() {
-		log.Println("closing db")
+		log.Println("closing pg")
 		pg.Close()
-		log.Println("db closed")
+		log.Println("closed pg successfully")
 	}()
 
 	listenConn := pg.AcquireConn(ctx)
