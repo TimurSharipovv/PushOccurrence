@@ -3,9 +3,8 @@ package mq
 import (
 	"context"
 	"log"
-	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"PushOccurrence/internal/db/mongoDb"
 )
 
 func (mq *Mq) MessageManager(ctx context.Context) {
@@ -71,32 +70,12 @@ func (mq *Mq) cleaningBuffer() {
 	}
 }
 
-func (mq *Mq) Publish(msg Message) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	confirmation, err := mq.Channel.PublishWithDeferredConfirmWithContext(ctx,
-		"",
-		mq.Queue,
-		false,
-		false,
-		amqp.Publishing{
-			DeliveryMode: amqp.Persistent,
-			ContentType:  "application/json",
-			Body:         msg.Payload,
-		},
-	)
-
-	if err != nil {
-		log.Printf("Publish error: %v", err)
-		mq.sendToBuffer(msg)
-		return
+func sendToOutbox(ctx context.Context, msg Message, repo mongoDb.OutboxRepository) error {
+	outboxMsg := mongoDb.OutboxMessage{
+		Payload: msg.Payload,
+		Topic:   "failed_rabbit_msg",
 	}
 
-	ok, err := confirmation.WaitContext(ctx)
-	if err != nil || !ok {
-		log.Printf("Confirmation timeout/error: %v", err)
-		mq.sendToBuffer(msg)
-		return
-	}
+	_, err := repo.Insert(ctx, outboxMsg)
+	return err
 }
