@@ -172,3 +172,47 @@ func TestIsConnectedError(t *testing.T) {
 		})
 	}
 }
+
+// 6 Тест. Проверка тестовыми данными функции FetchPendingMessages. Должна возвращать ID неотправленных сообщений PASS.
+func TestFetchPendingMessages(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	connStr := "postgres://postgres:postgres@localhost:5433/mydb?sslmode=disable"
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		t.Fatalf("failed to create pool: %v", err)
+	}
+	defer pool.Close()
+
+	var messageID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO data_exchange.message_queue_log (message_type, transferred)
+		VALUES ('TEST_TYPE', false)
+		RETURNING message_id::text
+	`).Scan(&messageID)
+
+	if err != nil {
+		t.Fatalf("failed to insert test message: %v", err)
+	}
+
+	ids, err := FetchPendingMessages(ctx, pool)
+
+	if err != nil {
+		t.Errorf("FetchPendingMessages failed: %v", err)
+	}
+
+	found := false
+	for _, id := range ids {
+		if id == messageID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("Expected message ID %s not found in pending messages", messageID)
+	}
+
+	t.Logf("FetchPendingMessages returned %d messages, including our test ID", len(ids))
+}
