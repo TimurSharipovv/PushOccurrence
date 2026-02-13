@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func (r *outboxRepository) FetchPending(ctx context.Context, limit int) ([]OutboxMessage, error) {
+func (r *OutboxRepository) FetchPending(ctx context.Context, limit int) ([]OutboxMessage, error) {
 	filter := bson.M{
 		"status": "pending",
 	}

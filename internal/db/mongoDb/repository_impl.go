@@ -4,10 +4,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type outboxRepository struct {
+type OutboxRepository struct {
 	collection *mongo.Collection
 }
 
-func NewOutboxRepository(db *mongo.Database) OutboxRepository {
-	return &outboxRepository{collection: db.Collection("messages")}
+func NewOutboxRepository(db *mongo.Database) OutboxRepositoryInteface {
+	return &OutboxRepository{collection: db.Collection("messages")}
 }
