@@ -4,13 +4,14 @@ import (
 	"context"
 	"log"
 
+	"PushOccurrence/internal/db/mongoDb"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messageID string) {
+func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongoRepo mongoDb.OutboxRepositoryInteface, messageID string) {
 	var body []byte
 
 	tx, err := pool.Begin(ctx)
@@ -23,7 +24,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	err = tx.QueryRow(ctx, `
 		SELECT 1
 		FROM data_exchange.message_queue_log
-		WHERE message_id = 
+		WHERE message_id = $1
 		AND transferred = false
 		FOR UPDATE SKIP LOCKED`,
 		messageID).Scan(new(int))
@@ -40,7 +41,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	err = tx.QueryRow(ctx, `
 		SELECT message_body
 		FROM data_exchange.message_queue_log_data
-		WHERE message_id = 
+		WHERE message_id = $1
 	`,
 		messageID).Scan(&body)
 
@@ -48,21 +49,31 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		log.Printf("failed to scan message_body for %s: %v", messageID, err)
 		return
 	}
-	err = rabbit.PublishSync(ctx, mq.Message{
+
+	msg := mq.Message{
 		MessageId: messageID,
 		Payload:   body,
-	})
+	}
+
+	err = rabbit.PublishSync(ctx, msg)
 
 	if err != nil {
-		log.Printf("failed to publish message %s to rabbit: %v", messageID, err)
-		return
+		log.Printf("failed to publish message %s to rabbit: %v. Trying fallback to Mongo...", messageID, err)
+
+		errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
+		if errFn != nil {
+			log.Printf("CRITICAL: Failed to send to fallback Outbox (Mongo): %v", errFn)
+			return
+		}
+
+		log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
 	}
 
 	_, err = tx.Exec(ctx, `
 		UPDATE data_exchange.message_queue_log
 		SET transferred = true,
     	transfer_time = now()
-		WHERE message_id = `,
+		WHERE message_id = $1`,
 		messageID)
 
 	if err != nil {

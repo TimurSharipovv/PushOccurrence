@@ -70,7 +70,7 @@ func (mq *Mq) cleaningBuffer() {
 	}
 }
 
-func sendToOutbox(ctx context.Context, msg Message, repo mongoDb.OutboxRepository) error {
+func SendToOutbox(ctx context.Context, msg Message, repo mongoDb.OutboxRepositoryInteface) error {
 	outboxMsg := mongoDb.OutboxMessage{
 		Payload: msg.Payload,
 		Topic:   "failed_rabbit_msg",

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"PushOccurrence/internal/db/mongoDb"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
 
@@ -31,11 +32,11 @@ func ListenChannels(ctx context.Context, conn *pgxpool.Conn, channels []string) 
 	}
 }
 
-func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <-chan os.Signal, rabbit *mq.Mq, cancel context.CancelFunc) {
+func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <-chan os.Signal, rabbit *mq.Mq, mongoRepo mongoDb.OutboxRepositoryInteface, cancel context.CancelFunc) {
 	for {
 		select {
 		case notification := <-notifyCh:
-			go handlers.HandleMessage(ctx, Pool, rabbit, notification.Payload)
+			go handlers.HandleMessage(ctx, Pool, rabbit, mongoRepo, notification.Payload)
 			log.Printf("received notify: channel=%s payload=%s", notification.Channel, notification.Payload)
 
 		case sig := <-sigCh:
