@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // 1 Тест. Входные данные корректны. Пытаемся подключиться к запущенной mongoDB. PASS
@@ -58,11 +61,11 @@ func TestInsertSuccess(t *testing.T) {
 		Payload: []byte(`{"key": "value"}`),
 	}
 
-	err = repo.Insert(ctx, msg)
+	id, err := repo.Insert(ctx, msg)
 	if err != nil {
 		t.Errorf("Insert failed: %v", err)
 	} else {
-		t.Logf("Insert success")
+		t.Logf("Insert success, ID: %s", id)
 	}
 }
 
@@ -90,7 +93,7 @@ func TestFetchPending(t *testing.T) {
 		Topic:   "fetch_test",
 		Payload: []byte(`{"data": "fetch_me"}`),
 	}
-	if err := repo.Insert(ctx, msg); err != nil {
+	if _, err := repo.Insert(ctx, msg); err != nil {
 		t.Fatalf("Setup failed (Insert): %v", err)
 	}
 
@@ -110,4 +113,70 @@ func TestFetchPending(t *testing.T) {
 		}
 	}
 	t.Logf("Fetched %d messages successfully", len(messages))
+}
+
+// 4 Тест. В ручную проваеряем жизненный цикл сообщения: Insert -> Processing -> Failed -> Sent PASS.
+func TestMessageLifecycle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := Connect(ctx, "mongodb://localhost:27017/outbox")
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect(ctx)
+
+	db := client.Database("outbox")
+	repo := NewOutboxRepository(db)
+
+	msg := OutboxMessage{
+		Topic:   "lifecycle_test",
+		Payload: []byte(`{"step": "init"}`),
+	}
+	id, err := repo.Insert(ctx, msg)
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	t.Logf("Working with message ID: %s", id)
+
+	if err := repo.MarkProcessing(ctx, id); err != nil {
+		t.Errorf("MarkProcessing failed: %v", err)
+	}
+
+	errMsg := "connection timeout"
+	if err := repo.MarkFailed(ctx, id, errMsg); err != nil {
+		t.Errorf("MarkFailed failed: %v", err)
+	}
+
+	oid, _ := primitive.ObjectIDFromHex(id)
+
+	var checkMsg OutboxMessage
+	err = db.Collection("messages").FindOne(ctx, bson.M{"_id": oid}).Decode(&checkMsg)
+	if err != nil {
+		t.Fatalf("FindOne failed: %v", err)
+	}
+
+	if checkMsg.Status != "failed" {
+		t.Errorf("Expected status 'failed', got '%s'", checkMsg.Status)
+	}
+	if checkMsg.Attempts != 1 {
+		t.Errorf("Expected attempts 1, got %d", checkMsg.Attempts)
+	}
+	if checkMsg.LastError == nil || *checkMsg.LastError != errMsg {
+		t.Errorf("Expected error '%s', got %v", errMsg, checkMsg.LastError)
+	}
+
+	if err := repo.MarkSent(ctx, id); err != nil {
+		t.Errorf("MarkSent failed: %v", err)
+	}
+
+	err = db.Collection("messages").FindOne(ctx, bson.M{"_id": oid}).Decode(&checkMsg)
+	if err != nil {
+		t.Fatalf("FindOne final check failed: %v", err)
+	}
+	if checkMsg.Status != "sent" {
+		t.Errorf("Expected status 'sent', got '%s'", checkMsg.Status)
+	}
+
+	t.Log("Lifecycle test passed successfully")
 }
