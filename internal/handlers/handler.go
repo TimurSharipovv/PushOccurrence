@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5"

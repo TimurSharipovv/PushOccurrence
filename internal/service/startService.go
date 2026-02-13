@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/db/pg"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"

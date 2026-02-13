@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 )
 
 func (mq *Mq) MessageManager(ctx context.Context) {

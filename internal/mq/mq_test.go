@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/bson"
@@ -363,19 +363,11 @@ func TestPublishMessageDelivered(t *testing.T) {
 	}
 }
 
-// Вспомогательные функции
-func (mq *Mq) IsConnected() bool {
-	mq.PublishMutex.Lock()
-	defer mq.PublishMutex.Unlock()
-	return mq.Conn != nil
-}
-
-// 8 Тест. Проверяем Fallback в Mongo (SendToOutbox)
+// 8 Тест. Проверяем Fallback в Mongo (SendToOutbox) PASS
 func TestSendToOutbox(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 1. Подключаемся к Mongo
 	url := "mongodb://localhost:27017/outbox"
 	client, err := mongoDb.Connect(ctx, url)
 	if err != nil {
@@ -383,41 +375,24 @@ func TestSendToOutbox(t *testing.T) {
 	}
 	defer client.Disconnect(ctx)
 
-	// 2. Инициализируем репозиторий
 	db := client.Database("outbox")
 	repo := mongoDb.NewOutboxRepository(db)
 
-	// 3. Формируем тестовое сообщение
 	testPayload := []byte(`{"event":"fallback_test"}`)
 	msg := Message{
 		MessageId: "uuid-1234-5678",
 		Payload:   testPayload,
 	}
 
-	// 4. Вызываем SendToOutbox
 	if err := SendToOutbox(ctx, msg, repo); err != nil {
 		t.Fatalf("SendToOutbox failed: %v", err)
 	}
 
-	// 5. Проверяем, что сообщение попало в Mongo
-	// Нам нужно найти последнее сообщение с топиком "failed_rabbit_msg"
-	// или просто проверить, что количество записей увеличилось.
-	// Для точности, проверим Payload.
-
-	// Используем нативный драйвер для проверки, чтобы не зависеть от FetchPending
-	// (или можно использовать FetchPending, но он фильтрует по статусу, что тоже ок)
-
 	coll := db.Collection("messages")
 	var foundMsg mongoDb.OutboxMessage
-	
-	// Ищем по Payload (в реальном коде лучше по ID, но SendToOutbox нам его пока не возвращает)
-	// Для теста сойдет поиск по содержимому, так как оно уникально в рамках теста
-	// (лучше сделать уникальный payload для каждого запуска, но пока так)
-	
-	// ВАЖНО: В SendToOutbox мы хардкодим Topic: "failed_rabbit_msg"
+
 	filter := bson.M{"topic": "failed_rabbit_msg"}
-	
-	// Сортируем по времени создания (новые сверху), чтобы взять последнее
+
 	opts := options.FindOne().SetSort(bson.M{"createdAt": -1})
 
 	err = coll.FindOne(ctx, filter, opts).Decode(&foundMsg)
@@ -430,4 +405,11 @@ func TestSendToOutbox(t *testing.T) {
 	}
 
 	t.Log("SendToOutbox test passed")
+}
+
+// Вспомогательные функции
+func (mq *Mq) IsConnected() bool {
+	mq.PublishMutex.Lock()
+	defer mq.PublishMutex.Unlock()
+	return mq.Conn != nil
 }

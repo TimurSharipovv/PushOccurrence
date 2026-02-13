@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
 
