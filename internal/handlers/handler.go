@@ -11,14 +11,16 @@ import (
 )
 
 func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messageID string) {
-	conn, err := pool.Acquire(ctx)
+	// Начинаем транзакцию, чтобы удерживать блокировку строки до конца обработки
+	tx, err := pool.Begin(ctx)
 	if err != nil {
-		log.Printf("failed to acquire db connection: %v", err)
+		log.Printf("failed to begin transaction: %v", err)
 		return
 	}
-	defer conn.Release()
+	defer tx.Rollback(ctx)
 
-	err = conn.QueryRow(ctx, `
+	// Блокируем строку, чтобы другие воркеры не взяли её
+	err = tx.QueryRow(ctx, `
 		SELECT 1
 		FROM data_exchange.message_queue_log
 		WHERE message_id = $1
@@ -28,15 +30,15 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			log.Printf("message %s already processed or does not exist", messageID)
+			// Это нормально - сообщение уже обрабатывается другим воркером или отправлено
 		} else {
-			log.Printf("failed to scan message_type: %v", err)
+			log.Printf("failed to scan/lock message: %v", err)
 		}
 		return
 	}
 
 	var body []byte
-	err = conn.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT message_body
 		FROM data_exchange.message_queue_log_data
 		WHERE message_id = $1
@@ -47,15 +49,22 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		return
 	}
 
-	rabbit.Messages <- mq.Message{
+	// Отправляем в RabbitMQ синхронно (ждем ACK)
+	err = rabbit.PublishSync(ctx, mq.Message{
 		MessageId: messageID,
 		Payload:   body,
+	})
+
+	if err != nil {
+		log.Printf("failed to publish message %s to rabbit: %v", messageID, err)
+		return
 	}
 
-	_, err = conn.Exec(ctx, `
+	// Обновляем статус в БД
+	_, err = tx.Exec(ctx, `
 		UPDATE data_exchange.message_queue_log
 		SET transferred = true,
-    	transfer_time = now()
+			transfer_time = now()
 		WHERE message_id = $1
 	`, messageID)
 
@@ -64,6 +73,11 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		return
 	}
 
-	log.Printf(
-		"message %s successfully sent to mq", messageID)
+	// Подтверждаем транзакцию
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("failed to commit transaction for %s: %v", messageID, err)
+		return
+	}
+
+	log.Printf("message %s successfully processed and sent", messageID)
 }
