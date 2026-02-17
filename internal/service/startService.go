@@ -65,7 +65,7 @@ func StartService(parent context.Context) {
 
 	pg.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
-	rabbit := mq.CreateMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
+	rabbit := mq.InitMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
 	pendingIDs, err := pg.FetchPendingMessages(ctx, pg.Pool)

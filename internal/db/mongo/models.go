@@ -16,4 +16,7 @@ type OutboxMessage struct {
 	Attempts   int                `bson:"attempts"`
 	CreatedAt  time.Time          `bson:"createdAt"`
 	UpdatedAt  time.Time          `bson:"updatedAt"`
+
+	WorkerId *string    `bson:"worker_id,omitempty"`
+	LockedAt *time.Time `bson:"locked-at,omitempty"`
 }

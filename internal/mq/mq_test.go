@@ -22,7 +22,7 @@ func TestConnectToRabbit(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
 	queue := "test_queue"
 
-	mq := CreateMq(ctx, url, queue)
+	mq := InitMq(ctx, url, queue)
 
 	timeout := time.After(200 * time.Second)
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -49,7 +49,7 @@ func TestReconnectAfterBrokerRestart(t *testing.T) {
 	url := "amqp://guest:guest@localhost:5672/"
 	queue := "test_queue"
 
-	mq := CreateMq(ctx, url, queue)
+	mq := InitMq(ctx, url, queue)
 	time.Sleep(10 * time.Second)
 
 	t.Log("STOP RabbitMQ now")

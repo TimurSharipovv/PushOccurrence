@@ -7,6 +7,7 @@ import (
 )
 
 func FetchPendingMessages(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	var ids []string
 	rows, err := pool.Query(ctx, `
 		SELECT message_id::text
 		FROM data_exchange.message_queue_log
@@ -19,7 +20,6 @@ func FetchPendingMessages(ctx context.Context, pool *pgxpool.Pool) ([]string, er
 	}
 	defer rows.Close()
 
-	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-func CreateMq(ctx context.Context, url, queue string) *Mq {
+func InitMq(ctx context.Context, url, queue string) *Mq {
 	mq := &Mq{
 		Buffer:          make(chan Message, 100),
 		Messages:        make(chan Message, 100),
