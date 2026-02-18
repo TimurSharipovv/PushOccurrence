@@ -79,12 +79,6 @@ func (mq *Mq) Monitor(ctx context.Context) {
 				log.Println("monitor: ConnectStatus dropped")
 			}
 
-			select {
-			case mq.RePublishStatus <- connected:
-			default:
-				log.Println("monitor: RePublishStatus dropped")
-			}
-
 			if connected {
 				log.Println("monitor: connection is ACTIVE")
 			} else {
