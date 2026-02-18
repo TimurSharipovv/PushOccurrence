@@ -126,7 +126,6 @@ func TestPublishMessageDelivered(t *testing.T) {
 
 	mq := InitMq(ctx, url, queueName)
 
-	// Ждем подключения в цикле (максимум 15 секунд)
 	connected := false
 	for i := 0; i < 30; i++ {
 		if mq.IsConnected() {
