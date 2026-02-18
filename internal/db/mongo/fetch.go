@@ -9,7 +9,12 @@ import (
 
 func (r *OutboxRepository) FetchPending(ctx context.Context, limit int) ([]OutboxMessage, error) {
 	filter := bson.M{
-		"status": "pending",
+		"$or": []bson.M{
+			{"status": "pending"},
+			{
+				"status": "failed",
+			},
+		},
 	}
 
 	opts := options.Find().SetSort(bson.M{"createdAt": 1}).SetLimit(int64(limit))
