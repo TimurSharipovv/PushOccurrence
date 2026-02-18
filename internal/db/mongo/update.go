@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func (r *outboxRepository) MarkProcessing(ctx context.Context, messageId string) error {
+func (r *OutboxRepository) MarkProcessing(ctx context.Context, messageId string) error {
 	oid, err := primitive.ObjectIDFromHex(messageId)
 	if err != nil {
 		return err
@@ -26,7 +26,7 @@ func (r *outboxRepository) MarkProcessing(ctx context.Context, messageId string)
 	return err
 }
 
-func (r *outboxRepository) MarkSent(ctx context.Context, messageId string) error {
+func (r *OutboxRepository) MarkSent(ctx context.Context, messageId string) error {
 	oid, err := primitive.ObjectIDFromHex(messageId)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (r *outboxRepository) MarkSent(ctx context.Context, messageId string) error
 	return err
 }
 
-func (r *outboxRepository) MarkFailed(ctx context.Context, messageId string, errMsg string) error {
+func (r *OutboxRepository) MarkFailed(ctx context.Context, messageId string, errMsg string) error {
 	oid, err := primitive.ObjectIDFromHex(messageId)
 	if err != nil {
 		return err
@@ -53,8 +53,8 @@ func (r *outboxRepository) MarkFailed(ctx context.Context, messageId string, err
 	filter := bson.M{"_id": oid}
 	update := bson.M{
 		"$set": bson.M{
-			"status":    "failed",
-			"updatedAt": time.Now(),
+			"status":     "failed",
+			"updatedAt":  time.Now(),
 			"last_error": errMsg,
 		},
 		"$inc": bson.M{

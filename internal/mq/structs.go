@@ -7,15 +7,12 @@ import (
 )
 
 type Mq struct {
-	Conn            *amqp.Connection
-	Channel         *amqp.Channel
-	Queue           string
-	URL             string
-	Messages        chan Message
-	Buffer          chan Message
-	ConnectStatus   chan bool
-	RePublishStatus chan bool
-	Connected       bool
+	Conn          *amqp.Connection
+	Channel       *amqp.Channel
+	Queue         string
+	URL           string
+	ConnectStatus chan bool
+	Connected     bool
 
 	PublishMutex sync.Mutex
 	mutex        sync.RWMutex

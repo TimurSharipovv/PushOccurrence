@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func (r *outboxRepository) Insert(ctx context.Context, msg OutboxMessage) (string, error) {
+func (r *OutboxRepository) Insert(ctx context.Context, msg OutboxMessage) (string, error) {
 	now := time.Now()
 
 	msg.Status = "pending"

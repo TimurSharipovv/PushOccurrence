@@ -8,5 +8,6 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	service.StartService(ctx)
 }

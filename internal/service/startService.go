@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	"PushOccurrence/internal/db/mongoDb"
+	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/db/pg"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
@@ -49,7 +49,6 @@ func StartService(parent context.Context) {
 	}()
 
 	repo := mongoDb.NewOutboxRepository(mongoClient.Database(cfg.Mongo.Database))
-	_ = repo
 
 	pg.Init(ctx, pgConnStr)
 	defer func() {
@@ -66,18 +65,16 @@ func StartService(parent context.Context) {
 
 	pg.ListenChannels(ctx, listenConn, cfg.Listener.Channels)
 
-	rabbit := mq.CreateMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
+	rabbit := mq.InitMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
-	// Recovery: обрабатываем сообщения, которые могли быть пропущены, пока сервис лежал
 	pendingIDs, err := pg.FetchPendingMessages(ctx, pg.Pool)
 	if err != nil {
 		log.Printf("failed to fetch pending messages: %v", err)
 	} else {
 		log.Printf("found %d pending messages, starting processing...", len(pendingIDs))
 		for _, id := range pendingIDs {
-			// Запускаем обработку так же, как если бы пришел notify
-			go handlers.HandleMessage(ctx, pg.Pool, rabbit, id)
+			go handlers.HandleMessage(ctx, pg.Pool, rabbit, repo, id)
 		}
 	}
 
@@ -94,7 +91,13 @@ func StartService(parent context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
+		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, repo, cancel)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		StartPoller(ctx, repo, rabbit)
 	}()
 
 	<-ctx.Done()

@@ -139,12 +139,15 @@ func TestMessageLifecycle(t *testing.T) {
 	}
 	t.Logf("Working with message ID: %s", id)
 
-	if err := repo.MarkProcessing(ctx, id); err != nil {
+	err = repo.MarkProcessing(ctx, id)
+	if err != nil {
 		t.Errorf("MarkProcessing failed: %v", err)
 	}
 
 	errMsg := "connection timeout"
-	if err := repo.MarkFailed(ctx, id, errMsg); err != nil {
+
+	err = repo.MarkFailed(ctx, id, errMsg)
+	if err != nil {
 		t.Errorf("MarkFailed failed: %v", err)
 	}
 
@@ -166,7 +169,8 @@ func TestMessageLifecycle(t *testing.T) {
 		t.Errorf("Expected error '%s', got %v", errMsg, checkMsg.LastError)
 	}
 
-	if err := repo.MarkSent(ctx, id); err != nil {
+	err = repo.MarkSent(ctx, id)
+	if err != nil {
 		t.Errorf("MarkSent failed: %v", err)
 	}
 
