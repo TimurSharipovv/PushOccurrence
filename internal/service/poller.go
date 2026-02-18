@@ -9,7 +9,7 @@ import (
 	"PushOccurrence/internal/mq"
 )
 
-func StartPoller(ctx context.Context, repo mongoDb.OutboxRepository, rabbit *mq.Mq) {
+func StartPoller(ctx context.Context, repo mongoDb.OutboxRepositoryInteface, rabbit *mq.Mq) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -47,7 +47,7 @@ func StartPoller(ctx context.Context, repo mongoDb.OutboxRepository, rabbit *mq.
 				}
 
 				err = repo.MarkSent(ctx, msgId)
-				if err != nil 
+				if err != nil {
 					continue
 				}
 

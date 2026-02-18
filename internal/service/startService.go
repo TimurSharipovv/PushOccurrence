@@ -94,6 +94,12 @@ func StartService(parent context.Context) {
 		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, repo, cancel)
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		StartPoller(ctx, repo, rabbit)
+	}()
+
 	<-ctx.Done()
 	log.Println("shutdown started, waiting for goroutines...")
 
