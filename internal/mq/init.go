@@ -14,7 +14,6 @@ func InitMq(ctx context.Context, url, queue string) *Mq {
 
 	go mq.Monitor(ctx)
 	go mq.connectManager(ctx, url)
-	go mq.MessageManager(ctx)
 
 	return mq
 }
