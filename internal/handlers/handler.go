@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log"
+	"time"
 
 	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/mq"
@@ -62,7 +63,8 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 
 		errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
 		if errFn != nil {
-			log.Printf("CRITICAL: Failed to send to fallback Outbox (Mongo): %v", errFn)
+			log.Printf("failed to send to fallback Outbox (Mongo): %v", errFn)
+			time.Sleep(5 * time.Second)
 			return
 		}
 

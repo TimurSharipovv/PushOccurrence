@@ -16,7 +16,7 @@ func StartPoller(ctx context.Context, repo mongoDb.OutboxRepositoryInteface, rab
 	for {
 		select {
 		case <-ctx.Done():
-			println("poller stopping")
+			log.Printf("poller stopping")
 			return
 		case <-ticker.C:
 			messages, err := repo.FetchPending(ctx, 50)
