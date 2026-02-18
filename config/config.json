@@ -1,8 +1,8 @@
 {
     "postgres": {
         "host": "localhost",
-        "port": 5432,
-        "database": "message_queue_db",
+        "port": 5433,
+        "database": "mydb",
         "user": "postgres",
         "password": "postgres",
         "ssl_mode": "disable"
@@ -33,5 +33,11 @@
         "retry_delay_sec": 2,
         "idle_sleep_ms": 500
         }
+    },
+
+    "mongo": {
+        "host": "localhost",
+        "port": 27017,
+        "database": "outbox"
     }
 }

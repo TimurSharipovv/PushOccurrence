@@ -4,6 +4,7 @@ type Config struct {
 	Postgres PostgresConfig `json:"postgres"`
 	RabbitMQ RabbitMQConfig `json:"rabbitmq"`
 	Listener ListenerConfig `json:"listener"`
+	Mongo    MongoConfig    `json:"mongo"`
 }
 
 type PostgresConfig struct {
@@ -13,6 +14,12 @@ type PostgresConfig struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	SSLMode  string `json:"ssl_mode"`
+}
+
+type MongoConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Database string `json:"database"`
 }
 
 type RabbitMQConfig struct {
