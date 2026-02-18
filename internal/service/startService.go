@@ -85,7 +85,7 @@ func StartService(parent context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg.ListenNotifications(ctx, listenConn, notifyCh)
+		pg.RunListener(ctx, pg.Pool, cfg.Listener.Channels, notifyCh)
 	}()
 
 	wg.Add(1)
