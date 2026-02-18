@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS data_exchange.message_queue_log_data (
 ├── cmd/app/main.go         # Точка входа в приложение
 ├── config/                 # Загрузка конфигурации
 ├── internal/
-│   ├── db/                 # Логика работы с PostgreSQL (подключение, слушатель)
+│   ├── db/                 # Логика работы с PostgreSQL (подключение, слушатель) и mongoDB (outbox)
 │   ├── handlers/           # Обработка уведомлений
 │   ├── mq/                 # Логика работы с RabbitMQ
 │   └── service/            # Инициализация и запуск сервиса
