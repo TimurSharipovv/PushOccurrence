@@ -74,7 +74,11 @@ func StartService(parent context.Context) {
 	} else {
 		log.Printf("found %d pending messages, starting processing...", len(pendingIDs))
 		for _, id := range pendingIDs {
-			go handlers.HandleMessage(ctx, pg.Pool, rabbit, repo, id)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				handlers.HandleMessage(ctx, pg.Pool, rabbit, repo, id)
+			}()
 		}
 	}
 
