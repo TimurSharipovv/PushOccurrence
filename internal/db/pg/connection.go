@@ -15,10 +15,14 @@ func Init(ctx context.Context, connectionString string) {
 	if err != nil {
 		log.Fatalf("failed to create pgx pool: %v", err)
 	}
+	log.Println("success create pgx pool")
 
-	if err := Pool.Ping(ctx); err != nil {
+	err = Pool.Ping(ctx)
+	log.Println("try ping to pg")
+	if err != nil {
 		log.Fatalf("failed to ping db: %v", err)
 	}
+	log.Println("success ping to pg")
 }
 
 func Close() {

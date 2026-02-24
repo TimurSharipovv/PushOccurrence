@@ -2,7 +2,7 @@
     "postgres": {
         "host": "localhost",
         "port": 5433,
-        "database": "mydb",
+        "database": "",
         "user": "postgres",
         "password": "postgres",
         "ssl_mode": "disable"

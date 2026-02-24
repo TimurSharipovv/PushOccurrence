@@ -47,8 +47,10 @@ func StartService(parent context.Context) {
 		}
 		log.Println("mongo conn closed successfully")
 	}()
+	log.Println("connect success")
 
 	repo := mongoDb.NewOutboxRepository(mongoClient.Database(cfg.Mongo.Database))
+	log.Println("init repo successfully")
 
 	pg.Init(ctx, pgConnStr)
 	defer func() {
@@ -56,6 +58,7 @@ func StartService(parent context.Context) {
 		pg.Close()
 		log.Println("closed pg successfully")
 	}()
+	log.Println("success init pg conn")
 
 	listenConn := pg.AcquireConn(ctx)
 	defer func() {
