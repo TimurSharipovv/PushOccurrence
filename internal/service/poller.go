@@ -10,7 +10,7 @@ import (
 )
 
 func StartPoller(ctx context.Context, repo mongoDb.OutboxRepositoryInteface, rabbit *mq.Mq) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {

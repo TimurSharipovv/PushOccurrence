@@ -26,8 +26,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 		SELECT 1
 		FROM data_exchange.message_queue_log
 		WHERE message_id = $1
-		AND transferred = false
-		FOR UPDATE SKIP LOCKED`,
+		AND transferred = false`,
 		messageID).Scan(new(int))
 
 	if err != nil {
@@ -57,7 +56,6 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 	}
 
 	err = rabbit.PublishSync(ctx, msg)
-
 	if err != nil {
 		log.Printf("failed to publish message %s to rabbit: %v. Trying fallback to Mongo...", messageID, err)
 

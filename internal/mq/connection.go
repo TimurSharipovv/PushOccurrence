@@ -55,7 +55,7 @@ func (mq *Mq) Monitor(ctx context.Context) {
 	log.Println("monitor start")
 	defer log.Println("monitor stop")
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
 	for {
