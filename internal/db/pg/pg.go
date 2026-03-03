@@ -43,7 +43,6 @@ func MainLoop(ctx context.Context, notifyCh <-chan *pgconn.Notification, sigCh <
 			log.Printf("received signal %s, shutting down...", sig)
 			cancel()
 			return
-
 		case <-ctx.Done():
 			return
 		}

@@ -67,6 +67,8 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 		}
 
 		log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
+
+		time.Sleep(5 * time.Second)
 	}
 
 	_, err = tx.Exec(ctx, `

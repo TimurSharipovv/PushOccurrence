@@ -22,21 +22,6 @@ services:
     volumes:
       - rabbit_data:/data/mq
 
-  postgres:
-    image: postgres:17
-    container_name: postgresdb
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mydb
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db.sql:/docker-entrypoint-initdb.d/init.sql
-
 volumes:
   mongo_data:
   rabbit_data:
-  postgres_data:
