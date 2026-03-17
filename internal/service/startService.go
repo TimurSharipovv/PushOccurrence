@@ -10,7 +10,6 @@ import (
 
 	// mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/db/pg"
-	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -71,34 +70,26 @@ func StartService(parent context.Context) {
 	rabbit := mq.InitMq(ctx, mqConnStr, cfg.RabbitMQ.Queue.Name)
 	defer rabbit.Close()
 
+	notifyCh := make(chan *pgconn.Notification)
 	pendingIDs, err := pg.FetchPendingMessages(ctx, pg.Pool)
 	if err != nil {
 		log.Printf("failed to fetch pending messages: %v", err)
 	} else {
 		log.Printf("found %d pending messages, starting processing...", len(pendingIDs))
-		for _, id := range pendingIDs {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				handlers.HandleMessage(ctx, pg.Pool, rabbit, id)
-			}()
-		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pg.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
+		}()
 	}
 
 	log.Println("service started, waiting for notifications...")
-
-	notifyCh := make(chan *pgconn.Notification)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		pg.RunListener(ctx, pg.Pool, cfg.Listener.Channels, notifyCh)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
 	}()
 
 	wg.Add(1)

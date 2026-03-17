@@ -58,6 +58,8 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	if err != nil {
 		log.Printf("failed to publish message %s to rabbit: %v. Trying fallback to Mongo...", messageID, err)
 
+		WriteToFile()
+
 		// errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
 		// if errFn != nil {
 		// 	log.Printf("failed to send to fallback Outbox (Mongo): %v", errFn)
@@ -65,7 +67,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 		// 	return
 		// }
 
-		log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
+		// log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
 
 		time.Sleep(5 * time.Second)
 	}
