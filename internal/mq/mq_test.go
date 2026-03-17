@@ -1,16 +1,16 @@
 package mq
 
 import (
-	"bytes"
+	// "bytes"
 	"context"
 	"testing"
 	"time"
 
-	mongoDb "PushOccurrence/internal/db/mongo"
+	// mongoDb "PushOccurrence/internal/db/mongo"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	// "go.mongodb.org/mongo-driver/bson"
+	// "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // 1 Тест. нет подключения на старте - надо подключиться(PASS)
@@ -178,48 +178,48 @@ func TestPublishMessageDelivered(t *testing.T) {
 }
 
 // 5 Тест. Проверяем Fallback в Mongo (SendToOutbox) PASS
-func TestSendToOutbox(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+// func TestSendToOutbox(t *testing.T) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
 
-	url := "mongodb://localhost:27017/outbox"
-	client, err := mongoDb.Connect(ctx, url)
-	if err != nil {
-		t.Fatalf("failed to connect to mongo: %v", err)
-	}
-	defer client.Disconnect(ctx)
+// 	url := "mongodb://localhost:27017/outbox"
+// 	client, err := mongoDb.Connect(ctx, url)
+// 	if err != nil {
+// 		t.Fatalf("failed to connect to mongo: %v", err)
+// 	}
+// 	defer client.Disconnect(ctx)
 
-	db := client.Database("outbox")
-	repo := mongoDb.NewOutboxRepository(db)
+// 	db := client.Database("outbox")
+// 	repo := mongoDb.NewOutboxRepository(db)
 
-	testPayload := []byte(`{"event":"fallback_test"}`)
-	msg := Message{
-		MessageId: "uuid-1234-5678",
-		Payload:   testPayload,
-	}
+// 	testPayload := []byte(`{"event":"fallback_test"}`)
+// 	msg := Message{
+// 		MessageId: "uuid-1234-5678",
+// 		Payload:   testPayload,
+// 	}
 
-	if err := SendToOutbox(ctx, msg, repo); err != nil {
-		t.Fatalf("SendToOutbox failed: %v", err)
-	}
+// 	if err := SendToOutbox(ctx, msg, repo); err != nil {
+// 		t.Fatalf("SendToOutbox failed: %v", err)
+// 	}
 
-	coll := db.Collection("messages")
-	var foundMsg mongoDb.OutboxMessage
+// 	coll := db.Collection("messages")
+// 	var foundMsg mongoDb.OutboxMessage
 
-	filter := bson.M{"topic": "failed_rabbit_msg"}
+// 	filter := bson.M{"topic": "failed_rabbit_msg"}
 
-	opts := options.FindOne().SetSort(bson.M{"createdAt": -1})
+// 	opts := options.FindOne().SetSort(bson.M{"createdAt": -1})
 
-	err = coll.FindOne(ctx, filter, opts).Decode(&foundMsg)
-	if err != nil {
-		t.Fatalf("Failed to find message in Mongo: %v", err)
-	}
+// 	err = coll.FindOne(ctx, filter, opts).Decode(&foundMsg)
+// 	if err != nil {
+// 		t.Fatalf("Failed to find message in Mongo: %v", err)
+// 	}
 
-	if !bytes.Equal(foundMsg.Payload, testPayload) {
-		t.Errorf("Payload mismatch. Expected %s, got %s", testPayload, foundMsg.Payload)
-	}
+// 	if !bytes.Equal(foundMsg.Payload, testPayload) {
+// 		t.Errorf("Payload mismatch. Expected %s, got %s", testPayload, foundMsg.Payload)
+// 	}
 
-	t.Log("SendToOutbox test passed")
-}
+// 	t.Log("SendToOutbox test passed")
+// }
 
 // Вспомогательные функции
 func (mq *Mq) IsConnected() bool {

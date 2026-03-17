@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	mongoDb "PushOccurrence/internal/db/mongo"
+	// mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/db/pg"
 	"PushOccurrence/internal/handlers"
 	"PushOccurrence/internal/mq"
@@ -33,24 +33,24 @@ func StartService(parent context.Context) {
 
 	pgConnStr := BuildConnString(cfg)
 	mqConnStr := BuildMQConnString(cfg)
-	mongoConnStr := BuildMongoConnString(cfg)
+	// mongoConnStr := BuildMongoConnString(cfg)
 
-	mongoClient, err := mongoDb.Connect(ctx, mongoConnStr)
-	if err != nil {
-		log.Fatalf("failed to connect to mongo %v", err)
-	}
-	defer func() {
-		log.Println("closing mongo conn")
-		err := mongoClient.Disconnect(ctx)
-		if err != nil {
-			log.Println("err diconnect mongo")
-		}
-		log.Println("mongo conn closed successfully")
-	}()
-	log.Println("connect success")
+	// mongoClient, err := mongoDb.Connect(ctx, mongoConnStr)
+	// if err != nil {
+	// 	log.Fatalf("failed to connect to mongo %v", err)
+	// }
+	// defer func() {
+	// 	log.Println("closing mongo conn")
+	// 	err := mongoClient.Disconnect(ctx)
+	// 	if err != nil {
+	// 		log.Println("err diconnect mongo")
+	// 	}
+	// 	log.Println("mongo conn closed successfully")
+	// }()
+	// log.Println("connect success")
 
-	repo := mongoDb.NewOutboxRepository(mongoClient.Database(cfg.Mongo.Database))
-	log.Println("init repo successfully")
+	// repo := mongoDb.NewOutboxRepository(mongoClient.Database(cfg.Mongo.Database))
+	// log.Println("init repo successfully")
 
 	pg.Init(ctx, pgConnStr)
 	defer func() {
@@ -80,7 +80,7 @@ func StartService(parent context.Context) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				handlers.HandleMessage(ctx, pg.Pool, rabbit, repo, id)
+				handlers.HandleMessage(ctx, pg.Pool, rabbit, id)
 			}()
 		}
 	}
@@ -98,13 +98,13 @@ func StartService(parent context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, repo, cancel)
+		pg.MainLoop(ctx, notifyCh, sigCh, rabbit, cancel)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		StartPoller(ctx, repo, rabbit)
+		// StartPoller(ctx, repo, rabbit)
 	}()
 
 	<-ctx.Done()

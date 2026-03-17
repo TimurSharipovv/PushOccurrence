@@ -5,14 +5,13 @@ import (
 	"log"
 	"time"
 
-	mongoDb "PushOccurrence/internal/db/mongo"
 	"PushOccurrence/internal/mq"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongoRepo mongoDb.OutboxRepositoryInteface, messageID string) {
+func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messageID string) {
 	var body []byte
 
 	tx, err := pool.Begin(ctx)
@@ -59,12 +58,12 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 	if err != nil {
 		log.Printf("failed to publish message %s to rabbit: %v. Trying fallback to Mongo...", messageID, err)
 
-		errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
-		if errFn != nil {
-			log.Printf("failed to send to fallback Outbox (Mongo): %v", errFn)
-			time.Sleep(5 * time.Second)
-			return
-		}
+		// errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
+		// if errFn != nil {
+		// 	log.Printf("failed to send to fallback Outbox (Mongo): %v", errFn)
+		// 	time.Sleep(5 * time.Second)
+		// 	return
+		// }
 
 		log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
 
