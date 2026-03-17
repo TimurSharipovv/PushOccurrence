@@ -47,15 +47,3 @@ type RetryConfig struct {
 type ListenerConfig struct {
 	Channels []string `json:"channels"`
 }
-
-/*
-81.95.134.121:5432 => 10.10.100.231:5432
-smartroad
-
-dev_ro
-08Dtfg343CmPCq7
-
-b2eb95df-5e4f-1019-450a-ff04e27e9a52
-578374d6-8e9c-b8bd-ca99-00d85d34856c
-
-*/
