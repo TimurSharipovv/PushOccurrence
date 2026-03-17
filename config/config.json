@@ -1,10 +1,10 @@
 {
     "postgres": {
-        "host": "10.10.100.231",
-        "port": 5432,
-        "database": "smartroad",
-        "user": "dev_ro",
-        "password": "08Dtfg343CmPCq7",
+        "host": "",
+        "port": 1,
+        "database": "",
+        "user": "",
+        "password": "",
         "ssl_mode": "disable"
      },
 
