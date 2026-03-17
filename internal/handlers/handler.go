@@ -71,17 +71,17 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 		log.Printf("Message %s saved to fallback Outbox (Mongo)", messageID)
 	}
 
-	_, err = tx.Exec(ctx, `
-		UPDATE data_exchange.message_queue_log
-		SET transferred = true,
-    	transfer_time = now()
-		WHERE message_id = $1`,
-		messageID)
+	// _, err = tx.Exec(ctx, `
+	// 	UPDATE data_exchange.message_queue_log
+	// 	SET transferred = true,
+	// 	transfer_time = now()
+	// 	WHERE message_id = $1`,
+	// 	messageID)
 
-	if err != nil {
-		log.Printf("failed to update log table for message %s: %v", messageID, err)
-		return
-	}
+	// if err != nil {
+	// 	log.Printf("failed to update log table for message %s: %v", messageID, err)
+	// 	return
+	// }
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("failed to commit transaction for %s: %v", messageID, err)
