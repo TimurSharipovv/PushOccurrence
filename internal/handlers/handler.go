@@ -26,7 +26,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, mongo
 		SELECT 1
 		FROM data_exchange.message_queue_log
 		WHERE message_id = $1
-		AND transferred = false`,
+		AND transferred = false`, // если есть возможность делать апдейт то лучше добавить FOR UPDATE SKIP LOCKED
 		messageID).Scan(new(int))
 
 	if err != nil {
