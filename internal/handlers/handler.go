@@ -13,6 +13,7 @@ import (
 
 func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messageID string) {
 	var body []byte
+	var filename = "FailedMessages"
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -58,7 +59,7 @@ func HandleMessage(ctx context.Context, pool *pgxpool.Pool, rabbit *mq.Mq, messa
 	if err != nil {
 		log.Printf("failed to publish message %s to rabbit: %v. Trying fallback to Mongo...", messageID, err)
 
-		WriteToFile()
+		WriteToFile(filename, msg)
 
 		// errFn := mq.SendToOutbox(ctx, msg, mongoRepo)
 		// if errFn != nil {
